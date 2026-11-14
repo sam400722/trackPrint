@@ -96,10 +96,25 @@ function drums(ctx, o) {
 
 const DRUMS = {
   punchy: {
-    level: 0,
+    level: -4, verb: -18,
     kick: { note: 'A1', pitchDecay: 0.05, octaves: 6, decay: 0.45 },
     snare: { freq: 1800, decay: 0.16, body: 'D3' },
     hat: { closed: 0.045, open: 0.3 },
+  },
+  dusty: {
+    level: -6, crush: 6, crushWet: 0.35, verb: -14,
+    kick: { note: 'A1', pitchDecay: 0.03, octaves: 4, decay: 0.5 },
+    snare: { freq: 1400, decay: 0.2, body: 'C3' },
+    hat: { closed: 0.03, open: 0.25, volume: -20 },
+    tom: { note: 'D2', volume: -8 },
+  },
+  soft: {
+    level: -3, verb: -6,
+    kick: { note: 'A1', pitchDecay: 0.02, octaves: 3, decay: 0.6, volume: -4 },
+    snare: { freq: 2500, decay: 0.35, body: 'A3', volume: -14 }, // brush swish
+    clap: { volume: -14 },
+    hat: { closed: 0.08, open: 0.6, volume: -24 },
+    tom: { note: 'E2', volume: -8 },
   },
 };
 
@@ -154,8 +169,8 @@ function bass(ctx, o) {
 }
 
 const BASS = {
-  saw: { type: 'mono', osc: 'sawtooth', glide: 0.03, sub: -8, level: -8 },
-  fm: { type: 'fm', harmonicity: 1, glide: 0.02, sub: -10, level: -8 },
+  saw: { type: 'mono', osc: 'sawtooth', glide: 0.03, sub: -8, level: -9 },
+  fm: { type: 'fm', harmonicity: 1, glide: 0.02, sub: -10, level: -2 },
   soft: { type: 'soft', osc: 'triangle', glide: 0.08, dur: '4n', level: -6 },
 };
 
@@ -214,18 +229,18 @@ const LEAD = {
     type: 'synth', osc: 'fatsquare', spread: 12, glide: 0.015, dur: '8n',
     vibrato: { rate: 5, depth: 0.06 },
     delay: { pingpong: true, time: '8n.', feedback: 0.3, send: -8 },
-    verb: -12, level: -16,
+    verb: -12, level: -7,
   },
   keys: {
     type: 'fm', harmonicity: 3, index: 2.5, decay: 0.9, dur: '8n',
     vibrato: { rate: 4.5, depth: 0.12 }, // tape wobble
     delay: { time: '4n', feedback: 0.25, send: -10 },
-    verb: -10, level: -12,
+    verb: -10, level: -1,
   },
   pluck: {
     type: 'pluck', dur: '4n',
     delay: { pingpong: true, time: '4n.', feedback: 0.45, send: -6 },
-    verb: -4, level: -6,
+    verb: -4, level: -4, // transient: peaks ~6 dB over its RMS
   },
 };
 
@@ -274,17 +289,17 @@ const PAD = {
   saw: {
     osc: 'fatsawtooth', spread: 25, attack: 1.2, release: 3, hold: 3,
     chorus: { rate: 0.7, depth: 0.5 }, motion: 0.08,
-    verb: -2, level: -24,
+    verb: -2, level: -18,
   },
   warm: {
     type: 'am', attack: 0.8, release: 2.5, hold: 2.5,
     chorus: { rate: 1.2, depth: 0.7 },
-    verb: -6, level: -16,
+    verb: -6, level: -6,
   },
   air: {
     osc: 'fattriangle', spread: 30, attack: 3, release: 5, hold: 3,
     phaser: true, motion: 0.05,
-    verb: 0, level: -16,
+    verb: 0, level: -20,
   },
 };
 
@@ -313,21 +328,36 @@ function makeKit(spec) {
   };
 }
 
-const BASIC = {
-  tail: 3,
-  reverb: { decay: 3, wet: 1 },
-  drums: DRUMS.punchy,
-  bass: BASS.saw,
-  lead: LEAD.square,
-  pad: PAD.saw,
-};
-
+// Order matters: the first kit is the default.
 export const KITS = {
-  basic: makeKit(BASIC),
-  // Temporary A/B kit; removed in A7.
-  test: makeKit({
-    ...BASIC,
+  // Clean, punchy electronic: tuned 808-style drums, saw bass with sub,
+  // fat square lead with ping-pong echoes, moving supersaw pad.
+  pulse: makeKit({
+    tail: 4,
+    reverb: { decay: 2.5, preDelay: 0.02, wet: 1 },
+    drums: DRUMS.punchy,
+    bass: BASS.saw,
+    lead: LEAD.square,
+    pad: PAD.saw,
+  }),
+  // Dusty and warm: whole kit low-passed at 4.5 kHz, crushed drums,
+  // FM bass, wobbly electric-piano lead, soft AM pad.
+  lofi: makeKit({
+    tail: 4,
+    bus: (add, out) => add(new Tone.Filter({ type: 'lowpass', frequency: 4500, rolloff: -12 })).connect(out),
+    reverb: { decay: 2, preDelay: 0.01, wet: 1 },
+    drums: DRUMS.dusty,
     bass: BASS.fm,
+    lead: LEAD.keys,
+    pad: PAD.warm,
+  }),
+  // Slow and spacious: soft brushed drums in an 8 s room, round bass,
+  // plucks echoing on dotted quarters, airy pad.
+  ambient: makeKit({
+    tail: 10,
+    reverb: { decay: 8, preDelay: 0.05, wet: 1 },
+    drums: DRUMS.soft,
+    bass: BASS.soft,
     lead: LEAD.pluck,
     pad: PAD.air,
   }),

@@ -14,10 +14,15 @@ const DIV = {
 // bits mode: glide the transport to the players' mean heart rate instead of a fixed tempo.
 const FOLLOW_TEMPO = true;
 
-const master = new Tone.Gain().toDestination();
+// Kits -> master -> glue compressor -> limiter -> speakers. The analysers tap the
+// limiter so the visuals see exactly the final mix.
+const master = new Tone.Gain();
+const comp = new Tone.Compressor({ threshold: -18, ratio: 3, attack: 0.01, release: 0.2 });
+const limiter = new Tone.Limiter(-1);
+master.chain(comp, limiter, Tone.getDestination());
 const wave = new Tone.Waveform(256);
 const fft = new Tone.FFT(64);
-master.fan(wave, fft);
+limiter.fan(wave, fft);
 
 let kitName = Object.keys(KITS)[0]; // first kit is the default
 let kit = KITS[kitName](master);
