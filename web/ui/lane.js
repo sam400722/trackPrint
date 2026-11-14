@@ -63,7 +63,7 @@ export function drawLane(c, r, now, u, dpr, col) {
   }
 
   const n = notes.live(now, SPAN);
-  c.globalAlpha = 0.5; c.strokeStyle = col.lead; c.lineWidth = Math.max(1.5, 0.35 * u);
+  c.globalAlpha = 0.5; c.strokeStyle = col.lead; c.lineWidth = Math.max(1.5, 0.22 * u);
   c.beginPath(); // lead melody, oldest → newest, soft curve between consecutive notes
   let px = NaN, py = 0;
   for (let k = n - 1; k >= 0; k--) {
