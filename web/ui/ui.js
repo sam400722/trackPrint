@@ -1,5 +1,6 @@
-// Controls + status. The canvas (stage and notes lane) is drawn by B3/B4.
+// Controls + status. The canvas (stage and notes lane) is drawn in stage.js.
 import { emit, on } from '../bus.js';
+import './stage.js';
 
 const $ = (id) => document.getElementById(id);
 const buttons = [$('connect'), $('sim')];
