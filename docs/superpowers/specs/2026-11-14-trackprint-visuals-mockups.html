@@ -1,0 +1,420 @@
+<title>trackPrint Directions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Chivo+Mono:wght@400;600&family=Fraunces:ital,opsz,wght@0,9..144,400;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif&family=Nunito:wght@400;600&family=Share+Tech+Mono&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: a 2x2 contact sheet of live 16:9 mockups on a neutral studio-grey wall. Single dark theme on purpose so each direction's own colours read true. */
+:root {
+  --wall: #141518; --card: #1c1d21; --fg: #e9e9ec; --muted: #9b9da5; --line: #2c2e34; --focus: #8fb4ff;
+  --head: "Space Grotesk", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--wall); color: var(--fg); }
+body { font: 15px/1.5 system-ui, sans-serif; padding-block: 28px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 22px; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+h1 { font: 600 clamp(22px, 3vw, 30px)/1.1 var(--head); margin: 0; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+button { font: 500 13px var(--mono); color: var(--fg); background: var(--card); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 22px; }
+figure { margin: 0; display: grid; gap: 12px; min-width: 0; }
+.screen { aspect-ratio: 16 / 9; max-width: 100%; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+canvas { width: 100%; height: 100%; display: block; }
+figcaption { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: baseline; }
+.letter { font: 600 22px var(--head); color: var(--muted); grid-row: span 2; }
+.name { font: 600 17px var(--head); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.sw { display: inline-flex; gap: 4px; }
+.sw i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 1px solid #0006; }
+.desc { color: var(--muted); margin: 0; max-width: 68ch; }
+h2 { font: 600 15px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 -6px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>trackPrint: visual directions</h1>
+      <p>The same simulated session (72, 64, 88 and 58 BPM) drawn four ways: each sensor's pulse trace, the BPM, beat kicks, notes in voice colours, and the audio analyser. The pad player lifts their finger every 20 s so you can see the no-finger state.</p>
+    </div>
+    <button id="pause" type="button" aria-pressed="false">Pause</button>
+  </header>
+  <h2>Hybrids of A and C</h2>
+  <div class="grid">
+    <figure><div class="screen"><canvas id="E" aria-label="Hybrid E mockup"></canvas></div>
+      <figcaption><span class="letter">E</span><span class="name">Organic stage, monitor data <span class="sw"><i style="background:#ff9e7a"></i><i style="background:#7ad1ff"></i><i style="background:#ffe07a"></i><i style="background:#c79bff"></i></span></span>
+      <p class="desc">C's breathing shapes stay centre stage. Each shape carries a large live BPM and a soft pulse trace, and a notes lane along the bottom draws the melody and drum hits as they play.</p></figcaption></figure>
+    <figure><div class="screen"><canvas id="F" aria-label="Hybrid F mockup"></canvas></div>
+      <figcaption><span class="letter">F</span><span class="name">Soft monitor <span class="sw"><i style="background:#ff9e7a"></i><i style="background:#7ad1ff"></i><i style="background:#ffe07a"></i><i style="background:#c79bff"></i></span></span>
+      <p class="desc">A's stacked monitor layout drawn in C's palette and type: one row per player, with a breathing shape as the heart light, a glowing trace, and a big serif BPM. The same notes lane runs underneath.</p></figcaption></figure>
+  </div>
+  <h2>Original four</h2>
+  <div class="grid">
+    <figure><div class="screen"><canvas id="A" aria-label="Clinical monitor mockup"></canvas></div>
+      <figcaption><span class="letter">A</span><span class="name">Clinical monitor <span class="sw"><i style="background:#3dff7a"></i><i style="background:#ffd23d"></i><i style="background:#3de0ff"></i><i style="background:#ff5ad1"></i></span></span>
+      <p class="desc">Phosphor traces on an ECG grid that sweep like a bedside monitor, with big monospace numbers. It suits the heart-rate story and every number reads from the back of the room.</p></figcaption></figure>
+    <figure><div class="screen"><canvas id="B" aria-label="Club neon mockup"></canvas></div>
+      <figcaption><span class="letter">B</span><span class="name">Club / neon <span class="sw"><i style="background:#ff2e88"></i><i style="background:#2e8bff"></i><i style="background:#c6ff2e"></i><i style="background:#a64bff"></i></span></span>
+      <p class="desc">Huge BPM numbers, neon glow, a burst on every drum hit, and a spectrum along the floor. The most "band on stage" of the four.</p></figcaption></figure>
+    <figure><div class="screen"><canvas id="C" aria-label="Organic mockup"></canvas></div>
+      <figcaption><span class="letter">C</span><span class="name">Organic <span class="sw"><i style="background:#ff9e7a"></i><i style="background:#7ad1ff"></i><i style="background:#ffe07a"></i><i style="background:#c79bff"></i></span></span>
+      <p class="desc">Each player is a shape that breathes with their pulse, notes drift up like spores, and the pad chord washes the whole screen. Calm, and the least numeric.</p></figcaption></figure>
+    <figure><div class="screen"><canvas id="D" aria-label="Printed chart recorder mockup"></canvas></div>
+      <figcaption><span class="letter">D</span><span class="name">Printed <span class="sw"><i style="background:#1d1d1f"></i><i style="background:#c3341f"></i><i style="background:#1f4c9c"></i><i style="background:#2d7a40"></i></span></span>
+      <p class="desc">A chart recorder on graph paper: pens draw each pulse, beat ticks run along the edge, and notes are stamped like a score. The "print" in trackPrint. Light-themed.</p></figcaption></figure>
+  </div>
+</div>
+
+<script>
+// ---------- shared simulation (stands in for frame / note / analyser) ----------
+const VOICES = ['drums', 'bass', 'lead', 'pad'], BPM = [72, 64, 88, 58], AMP = [1, .6, 1.3, .8];
+const SCALE = [0, 3, 5, 7, 10], N = 200;
+const g = (x, m, w) => Math.exp(-(((x - m) / w) ** 2));
+const S = {
+  t: 0, head: 0, buf: VOICES.map(() => new Float32Array(N)), beat: VOICES.map(() => new Uint8Array(N)),
+  bpm: [0, 0, 0, 0], flash: [0, 0, 0, 0], finger: [1, 1, 1, 1], lastIdx: [-1, -1, -1, -1], count: [0, 0, 0, 0],
+  notes: [], fft: new Float32Array(64), wave: new Float32Array(256), osc: [], chord: null, chordT: -99, level: [0, 0, 0, 0],
+};
+const pick = (a) => a[(Math.random() * a.length) | 0];
+function bump(bin, amt, w) { for (let k = 0; k < 64; k++) S.fft[k] = Math.min(1, S.fft[k] + amt * g(k, bin, w)); }
+function fire(i) {
+  const vel = .4 + Math.random() * .6, n = { t: S.t, v: i, vel };
+  if (i === 0) {
+    n.drum = pick(['kick', 'kick', 'snare', 'hat', 'hat']);
+    if (n.drum === 'kick') { S.osc.push({ f: 2, a: vel, d: 6 }); bump(2, vel, 2); }
+    else if (n.drum === 'snare') { S.osc.push({ f: 0, a: vel * .7, d: 12, noise: 1 }); bump(14, vel * .8, 6); }
+    else { S.osc.push({ f: 0, a: vel * .3, d: 30, noise: 1 }); bump(52, vel * .6, 5); }
+  } else if (i === 3) {
+    if (++S.count[3] % 2) return; // pad on every other beat (mock)
+    const r = pick([0, 1, 2]); n.notes = [57 + SCALE[r], 62 + SCALE[r], 67 + SCALE[r]];
+    S.chord = n.notes; S.chordT = S.t;
+    n.notes.forEach((m) => { S.osc.push({ f: (m - 40) / 6, a: .25, d: .6 }); bump((m - 30) / 1.1, .5, 3); });
+  } else {
+    const base = i === 1 ? 45 : 69, idx = (Math.random() * (i === 1 ? 5 : 8)) | 0;
+    n.notes = [base + 12 * Math.floor(idx / 5) + SCALE[idx % 5]];
+    S.osc.push({ f: (n.notes[0] - 40) / 6, a: vel * .6, d: i === 1 ? 3 : 4 }); bump((n.notes[0] - 30) / 1.1, vel, 2);
+  }
+  S.notes.push(n);
+}
+function step() { // one 50 Hz sample
+  S.t += .02;
+  VOICES.forEach((_, i) => {
+    const on = i === 3 ? (S.t % 20) < 15 : 1;
+    if (!on && S.finger[i]) { S.bpm[i] = 0; S.count[i] = 0; }
+    S.finger[i] = on;
+    const ph = S.t * BPM[i] / 60 + i * .27, p = ((ph % 1) + 1) % 1, idx = Math.floor(ph - .1);
+    const ac = on ? AMP[i] * (g(p, .1, .035) + .35 * g(p, .38, .06)) + (Math.random() - .5) * .05 : 0;
+    S.buf[i][S.head] = ac;
+    let b = 0;
+    if (on && idx !== S.lastIdx[i]) {
+      b = 1; S.flash[i] = 1;
+      if (++S.count[i] > 1) S.bpm[i] = S.bpm[i] ? S.bpm[i] * .7 + (BPM[i] + (Math.random() - .5) * 3) * .3 : BPM[i];
+      fire(i);
+    }
+    S.lastIdx[i] = idx;
+    S.beat[i][S.head] = b;
+    S.level[i] += (Math.min(1, Math.abs(ac) / AMP[i]) - S.level[i]) * .3;
+  });
+  S.head = (S.head + 1) % N;
+  S.notes = S.notes.filter((n) => S.t - n.t < 6);
+}
+function tickVisual(dt) {
+  for (let i = 0; i < 4; i++) S.flash[i] *= Math.exp(-dt * 7);
+  for (let k = 0; k < 64; k++) S.fft[k] = S.fft[k] * Math.exp(-dt * 3) + .015 * Math.random();
+  for (let k = 0; k < 256; k++) {
+    let v = 0;
+    for (const o of S.osc) v += o.a * (o.noise ? Math.random() * 2 - 1 : Math.sin(2 * Math.PI * o.f * k / 64 + S.t * 3));
+    S.wave[k] = Math.tanh(v);
+  }
+  S.osc.forEach((o) => (o.a *= Math.exp(-dt * o.d)));
+  S.osc = S.osc.filter((o) => o.a > .01);
+}
+
+// ---------- drawing helpers ----------
+function bufMax(b) { let m = .001; for (const v of b) m = Math.max(m, Math.abs(v)); return m; }
+function traceScroll(c, i, x, y, w, h) { // newest at right; scaled by its own max
+  const b = S.buf[i], m = bufMax(b);
+  c.beginPath();
+  for (let k = 0; k < N; k++) { const v = b[(S.head + k) % N] / m; const px = x + k / (N - 1) * w, py = y + h * .82 - v * h * .7; k ? c.lineTo(px, py) : c.moveTo(px, py); }
+  c.stroke();
+}
+function traceSweep(c, i, x, y, w, h) { // bedside-monitor sweep with a gap ahead of the write head
+  const b = S.buf[i], m = bufMax(b);
+  c.beginPath(); let pen = false;
+  for (let k = 0; k < N; k++) {
+    if ((k - S.head + N) % N < 8) { pen = false; continue; }
+    const px = x + k / (N - 1) * w, py = y + h * .82 - (b[k] / m) * h * .7;
+    pen ? c.lineTo(px, py) : c.moveTo(px, py); pen = true;
+  }
+  c.stroke();
+}
+function waveLine(c, x, y, w, h) { c.beginPath(); for (let k = 0; k < 256; k++) { const px = x + k / 255 * w, py = y + h / 2 - S.wave[k] * h * .45; k ? c.lineTo(px, py) : c.moveTo(px, py); } c.stroke(); }
+const bpmText = (i) => S.bpm[i] ? String(Math.round(S.bpm[i])) : '--';
+const alpha = (hex, a) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+
+// ---------- A: clinical monitor ----------
+function clinical(c, W, H) {
+  const C = ['#3dff7a', '#ffd23d', '#3de0ff', '#ff5ad1'], u = H / 100, F = (s) => `${s}px "Share Tech Mono", ui-monospace, monospace`;
+  c.fillStyle = '#020805'; c.fillRect(0, 0, W, H);
+  const st = W / 80; c.lineWidth = 1;
+  for (let k = 0, x = 0; x < W; k++, x += st) { c.strokeStyle = k % 5 ? 'rgba(61,255,122,.035)' : 'rgba(61,255,122,.09)'; c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+  for (let k = 0, y = 0; y < H; k++, y += st) { c.strokeStyle = k % 5 ? 'rgba(61,255,122,.035)' : 'rgba(61,255,122,.09)'; c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+  c.textBaseline = 'middle'; c.font = F(4.6 * u); c.fillStyle = '#3dff7a'; c.fillText('trackPrint', 2.5 * u, 5.5 * u);
+  c.font = F(2.6 * u); c.textAlign = 'right'; c.fillStyle = '#9fe8b5';
+  c.fillText('[ CONNECT ]  [■ SIMULATE ]   MODE: BEATS   KIT: BASIC   ● RUNNING', W - 2.5 * u, 5.5 * u); c.textAlign = 'left';
+  const top = 11 * u, mH = 21 * u, rH = (H - top - mH - 3 * u) / 4, tw = W * .72;
+  for (let i = 0; i < 4; i++) {
+    const y = top + i * rH, on = S.finger[i];
+    c.strokeStyle = 'rgba(61,255,122,.25)'; c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke();
+    c.font = F(2.6 * u); c.fillStyle = on ? C[i] : alpha(C[i], .45); c.fillText(`CH${i}  ${VOICES[i].toUpperCase()}`, 2.5 * u, y + 3 * u);
+    if (on) {
+      c.save(); c.strokeStyle = C[i]; c.lineWidth = Math.max(1.4, .35 * u); c.shadowColor = C[i]; c.shadowBlur = 8;
+      traceSweep(c, i, 2.5 * u, y + 4 * u, tw - 2.5 * u, rH - 5 * u); c.restore();
+    } else {
+      c.setLineDash([4, 6]); c.strokeStyle = alpha(C[i], .3); c.beginPath(); c.moveTo(2.5 * u, y + rH * .75); c.lineTo(tw, y + rH * .75); c.stroke(); c.setLineDash([]);
+      c.fillStyle = alpha(C[i], .8); c.font = F(2.6 * u); c.fillText(`NO SIGNAL · PLACE FINGER ON SENSOR ${i + 1}`, W * .2, y + rH * .5);
+    }
+    c.fillStyle = alpha(C[i], .2 + .8 * S.flash[i]); c.font = F(4 * u); c.fillText('♥', tw + 3 * u, y + rH * .5);
+    c.textAlign = 'right'; c.font = F(rH * .78); c.fillStyle = on ? C[i] : alpha(C[i], .35); c.fillText(bpmText(i), W - 7.5 * u, y + rH * .55);
+    c.font = F(2.2 * u); c.fillText('BPM', W - 2.5 * u, y + rH * .55 + rH * .22); c.textAlign = 'left';
+  }
+  const y0 = H - mH - 2 * u;
+  c.strokeStyle = 'rgba(61,255,122,.25)'; c.beginPath(); c.moveTo(0, y0); c.lineTo(W, y0); c.stroke();
+  c.font = F(2.4 * u); c.fillStyle = '#9fe8b5'; c.fillText('AUDIO  ~  NOTES', 2.5 * u, y0 + 3 * u);
+  c.save(); c.strokeStyle = 'rgba(220,255,230,.75)'; c.lineWidth = 1.2; c.shadowColor = '#3dff7a'; c.shadowBlur = 6; waveLine(c, 2.5 * u, y0 + 4 * u, W - 5 * u, mH - 3 * u); c.restore();
+  for (const n of S.notes) {
+    const age = S.t - n.t; if (age > 4) continue;
+    const x = W - 2.5 * u - age / 4 * (W - 5 * u), p = n.notes ? (n.notes[0] - 40) / 50 : .1, h = (1.5 + n.vel * 2) * u;
+    c.fillStyle = alpha(C[n.v], 1 - age / 4); c.fillRect(x, y0 + mH - p * (mH - 4 * u) - h, Math.max(2, .4 * u), h);
+  }
+}
+
+// ---------- B: club / neon ----------
+function club(c, W, H) {
+  const C = ['#ff2e88', '#2e8bff', '#c6ff2e', '#a64bff'], u = H / 100;
+  c.fillStyle = '#08040f'; c.fillRect(0, 0, W, H);
+  c.textBaseline = 'middle'; c.font = `${5 * u}px Anton, Impact, sans-serif`; c.fillStyle = '#fff';
+  c.letterSpacing = `${.4 * u}px`; c.fillText('TRACKPRINT', 2.5 * u, 6 * u); c.letterSpacing = '0px';
+  const pills = [['CONNECT', 0], ['SIMULATE', 1], ['BEATS', 1], ['BITS', 0], ['KIT · BASIC', 0]];
+  c.font = `600 ${2.2 * u}px "Chivo Mono", monospace`; let px = W - 2.5 * u;
+  for (const [t, f] of pills.reverse()) {
+    const w = c.measureText(t).width + 3 * u; px -= w;
+    c.beginPath(); c.roundRect(px, 3.5 * u, w, 5 * u, 2.5 * u);
+    if (f) { c.fillStyle = '#fff'; c.fill(); c.fillStyle = '#08040f'; } else { c.strokeStyle = 'rgba(255,255,255,.5)'; c.stroke(); c.fillStyle = '#fff'; }
+    c.fillText(t, px + 1.5 * u, 6.1 * u); px -= 1.2 * u;
+  }
+  const cw = (W - 5 * u) / 4;
+  for (let i = 0; i < 4; i++) {
+    const x = 2.5 * u + i * cw, on = S.finger[i], cx = x + cw / 2;
+    c.fillStyle = alpha(C[i], .05 + .22 * S.flash[i]); c.beginPath(); c.roundRect(x + .6 * u, 12 * u, cw - 1.2 * u, 50 * u, 1.5 * u); c.fill();
+    c.font = `600 ${2.4 * u}px "Chivo Mono", monospace`; c.fillStyle = C[i]; c.letterSpacing = `${.5 * u}px`; c.fillText(VOICES[i].toUpperCase(), x + 2.5 * u, 16.5 * u); c.letterSpacing = '0px';
+    c.save(); c.font = `${18 * u}px Anton, Impact, sans-serif`; c.textAlign = 'center';
+    if (on) { c.shadowColor = C[i]; c.shadowBlur = 10 + 40 * S.flash[i]; c.fillStyle = '#fff'; c.fillText(bpmText(i), cx, 32 * u); }
+    else { c.strokeStyle = alpha(C[i], .5); c.lineWidth = 1.5; c.strokeText('--', cx, 32 * u); c.font = `600 ${2 * u}px "Chivo Mono", monospace`; c.fillStyle = alpha(C[i], .9); c.fillText('PLACE A FINGER · SENSOR ' + (i + 1), cx, 47 * u); }
+    c.restore();
+    if (on) { c.save(); c.strokeStyle = C[i]; c.lineWidth = .5 * u; c.lineJoin = 'round'; c.shadowColor = C[i]; c.shadowBlur = 14; traceScroll(c, i, x + 2 * u, 43 * u, cw - 4 * u, 17 * u); c.restore(); }
+  }
+  for (const n of S.notes) { // drum bursts over the drums column
+    if (n.v || S.t - n.t > .6) continue;
+    const a = (S.t - n.t) / .6, r = (1 + a * 9) * u * (.6 + n.vel), cx = 2.5 * u + cw / 2, cy = 32 * u;
+    c.save(); c.strokeStyle = alpha(C[0], 1 - a); c.lineWidth = .6 * u; c.shadowColor = C[0]; c.shadowBlur = 20; c.beginPath();
+    if (n.drum === 'kick') c.arc(cx, cy, r * 1.4, 0, 7); else if (n.drum === 'snare') c.rect(cx - r, cy - r, r * 2, r * 2); else { c.moveTo(cx, cy - r); c.lineTo(cx + r, cy + r * .8); c.lineTo(cx - r, cy + r * .8); c.closePath(); }
+    c.stroke(); c.restore();
+  }
+  const y0 = 66 * u, fh = H - y0 - 2 * u, bw = (W - 5 * u) / 64;
+  const grad = c.createLinearGradient(2.5 * u, 0, W - 2.5 * u, 0); C.forEach((col, i) => grad.addColorStop(i / 3, col));
+  c.save(); c.fillStyle = grad; c.shadowColor = '#ff2e88'; c.shadowBlur = 12;
+  for (let k = 0; k < 64; k++) { const h = Math.max(.4 * u, S.fft[k] * fh * .9); c.fillRect(2.5 * u + k * bw + 1, y0 + fh - h, bw - 2, h); }
+  c.restore();
+  for (const n of S.notes) {
+    if (n.v !== 1 && n.v !== 2) continue; const age = S.t - n.t; if (age > 3) continue;
+    const x = W - 2.5 * u - age / 3 * (W - 5 * u), y = y0 + fh * .9 - (n.notes[0] - 42) / 45 * fh;
+    c.save(); c.fillStyle = alpha(C[n.v], 1 - age / 3); c.shadowColor = C[n.v]; c.shadowBlur = 16; c.beginPath(); c.arc(x, y, (.6 + n.vel) * u, 0, 7); c.fill(); c.restore();
+  }
+}
+
+// ---------- C: organic ----------
+function organic(c, W, H) {
+  const C = ['#ff9e7a', '#7ad1ff', '#ffe07a', '#c79bff'], u = H / 100;
+  const bg = c.createLinearGradient(0, 0, W, H); bg.addColorStop(0, '#0b1430'); bg.addColorStop(1, '#1d1238'); c.fillStyle = bg; c.fillRect(0, 0, W, H);
+  const wash = Math.max(0, 1 - (S.t - S.chordT) / 7);
+  if (wash > 0) { const hue = ['#c79bff', '#ff9ed8', '#9bb7ff'][(S.chord[0] - 57) % 3] || '#c79bff'; const r = c.createRadialGradient(W * .8, H * .2, 0, W * .8, H * .2, W * .9); r.addColorStop(0, alpha(hue, .38 * wash)); r.addColorStop(1, alpha(hue, 0)); c.fillStyle = r; c.fillRect(0, 0, W, H); }
+  c.textBaseline = 'middle'; c.font = `italic ${5.2 * u}px Fraunces, Georgia, serif`; c.fillStyle = '#f4ecff'; c.fillText('trackPrint', 3 * u, 7 * u);
+  c.font = `600 ${2.3 * u}px Nunito, system-ui, sans-serif`; c.textAlign = 'right'; c.fillStyle = 'rgba(244,236,255,.6)';
+  c.fillText('connect  ·  simulating  ·  beats  ·  soft kit', W - 3 * u, 7 * u); c.textAlign = 'left';
+  const R = Math.min(W * .08, H * .16);
+  for (let i = 0; i < 4; i++) {
+    const cx = W * (.2 + .2 * i), cy = H * .47, on = S.finger[i];
+    const r = R * (on ? .85 + .15 * S.level[i] + .2 * S.flash[i] : .8);
+    c.beginPath();
+    for (let k = 0; k <= 60; k++) { const a = k / 60 * Math.PI * 2, rr = r * (1 + .06 * Math.sin(3 * a + S.t * (1 + i * .2)) + .04 * Math.sin(5 * a - S.t * 1.3 + i)); const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr; k ? c.lineTo(px, py) : c.moveTo(px, py); }
+    if (on) {
+      const gr = c.createRadialGradient(cx - r * .3, cy - r * .3, 0, cx, cy, r * 1.1); gr.addColorStop(0, alpha(C[i], .95)); gr.addColorStop(1, alpha(C[i], .12));
+      c.save(); c.fillStyle = gr; c.shadowColor = C[i]; c.shadowBlur = 30 + 30 * S.flash[i]; c.fill(); c.restore();
+    } else {
+      c.setLineDash([3, 7]); c.strokeStyle = alpha(C[i], .4); c.lineWidth = 1.5; c.stroke(); c.setLineDash([]);
+      c.font = `italic ${2.4 * u}px Fraunces, Georgia, serif`; c.fillStyle = alpha(C[i], .85); c.textAlign = 'center'; c.fillText('rest a finger here', cx, cy); c.textAlign = 'left';
+    }
+    c.textAlign = 'center'; c.font = `italic ${3.2 * u}px Fraunces, Georgia, serif`; c.fillStyle = '#f4ecff'; c.fillText(VOICES[i], cx, cy + R * 1.55);
+    c.font = `600 ${2.4 * u}px Nunito, system-ui, sans-serif`; c.fillStyle = alpha(C[i], .9); c.fillText(on && S.bpm[i] ? `${Math.round(S.bpm[i])} beats a minute` : 'waiting', cx, cy + R * 1.55 + 4 * u); c.textAlign = 'left';
+  }
+  for (const n of S.notes) {
+    const age = S.t - n.t, cx = W * (.2 + .2 * n.v), cy = H * .47;
+    if (n.v === 0 && age < 1.2) { c.strokeStyle = alpha(C[0], (1 - age / 1.2) * .6 * n.vel); c.lineWidth = 1.5; c.beginPath(); c.arc(cx, cy, R * (1 + age * 1.1), 0, 7); c.stroke(); }
+    if ((n.v === 1 || n.v === 2) && age < 3.5) {
+      const y = cy - R * 1.1 - age * H * .06 - (n.notes[0] - 45) / 40 * H * .08, x = cx + Math.sin(age * 1.7 + n.notes[0]) * R * .7;
+      c.fillStyle = alpha(C[n.v], (1 - age / 3.5) * .9); c.beginPath(); c.arc(x, y, (.5 + n.vel * .8) * u, 0, 7); c.fill();
+    }
+  }
+  c.save(); c.globalAlpha = .35; c.strokeStyle = '#f4ecff'; c.lineWidth = 2; waveLine(c, 0, H * .8, W, H * .14); c.globalAlpha = .15; c.lineWidth = 6; waveLine(c, 0, H * .8, W, H * .14); c.restore();
+}
+
+// ---------- hybrids (A's data, C's vibe) ----------
+const OC = ['#ff9e7a', '#7ad1ff', '#ffe07a', '#c79bff'];
+function organicGround(c, W, H, u, status) {
+  const bg = c.createLinearGradient(0, 0, W, H); bg.addColorStop(0, '#0b1430'); bg.addColorStop(1, '#1d1238'); c.fillStyle = bg; c.fillRect(0, 0, W, H);
+  const wash = Math.max(0, 1 - (S.t - S.chordT) / 7);
+  if (wash > 0 && S.chord) { const hue = ['#c79bff', '#ff9ed8', '#9bb7ff'][(S.chord[0] - 57) % 3] || '#c79bff'; const r = c.createRadialGradient(W * .8, H * .15, 0, W * .8, H * .15, W * .9); r.addColorStop(0, alpha(hue, .34 * wash)); r.addColorStop(1, alpha(hue, 0)); c.fillStyle = r; c.fillRect(0, 0, W, H); }
+  c.textBaseline = 'middle'; c.font = `italic ${5 * u}px Fraunces, Georgia, serif`; c.fillStyle = '#f4ecff'; c.fillText('trackPrint', 3 * u, 6.5 * u);
+  c.font = `600 ${2.2 * u}px Nunito, system-ui, sans-serif`; c.textAlign = 'right'; c.fillStyle = 'rgba(244,236,255,.6)'; c.fillText(status, W - 3 * u, 6.5 * u); c.textAlign = 'left';
+}
+function blobPath(c, cx, cy, r, i) {
+  c.beginPath();
+  for (let k = 0; k <= 60; k++) { const a = k / 60 * Math.PI * 2, rr = r * (1 + .06 * Math.sin(3 * a + S.t * (1 + i * .2)) + .04 * Math.sin(5 * a - S.t * 1.3 + i)); const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr; k ? c.lineTo(px, py) : c.moveTo(px, py); }
+}
+function blob(c, cx, cy, r, i) {
+  blobPath(c, cx, cy, r, i);
+  if (S.finger[i]) { const gr = c.createRadialGradient(cx - r * .3, cy - r * .3, 0, cx, cy, r * 1.1); gr.addColorStop(0, alpha(OC[i], .95)); gr.addColorStop(1, alpha(OC[i], .12)); c.save(); c.fillStyle = gr; c.shadowColor = OC[i]; c.shadowBlur = 24 + 30 * S.flash[i]; c.fill(); c.restore(); }
+  else { c.setLineDash([3, 7]); c.strokeStyle = alpha(OC[i], .45); c.lineWidth = 1.5; c.stroke(); c.setLineDash([]); }
+}
+function softTrace(c, i, x, y, w, h, u) {
+  const gr = c.createLinearGradient(x, 0, x + w, 0); gr.addColorStop(0, alpha(OC[i], 0)); gr.addColorStop(.6, alpha(OC[i], .7)); gr.addColorStop(1, OC[i]);
+  c.save(); c.strokeStyle = gr; c.lineWidth = Math.max(1.5, .45 * u); c.lineJoin = c.lineCap = 'round'; c.shadowColor = OC[i]; c.shadowBlur = 10; traceScroll(c, i, x, y, w, h); c.restore();
+}
+function notesLane(c, x, y, w, h, u) { // last 5 s, newest at right; pitch = height
+  c.save(); c.globalAlpha = .18; c.strokeStyle = '#f4ecff'; c.lineWidth = 1.5; waveLine(c, x, y, w, h); c.restore();
+  c.font = `italic ${2.2 * u}px Fraunces, Georgia, serif`; c.fillStyle = 'rgba(244,236,255,.55)'; c.fillText('what you hear', x, y + 1.5 * u);
+  const T = 5, X = (n) => x + w - (S.t - n.t) / T * w, Y = (m) => y + h * .8 - (m - 42) / 42 * h * .7;
+  let prev = null;
+  for (const n of S.notes) if (n.v === 2 && S.t - n.t < T) { const p = [X(n), Y(n.notes[0])]; if (prev) { c.strokeStyle = alpha(OC[2], .45); c.lineWidth = 1.5; c.beginPath(); c.moveTo(prev[0], prev[1]); c.quadraticCurveTo((prev[0] + p[0]) / 2, prev[1], p[0], p[1]); c.stroke(); } prev = p; }
+  for (const n of S.notes) {
+    const age = S.t - n.t; if (age > T) continue; const px = X(n), fade = 1 - age / T, r = (.5 + .7 * n.vel) * u;
+    c.save(); c.shadowColor = OC[n.v]; c.shadowBlur = 12 * fade;
+    if (n.v === 0) { c.strokeStyle = alpha(OC[0], fade); c.lineWidth = 1.5; c.beginPath(); c.arc(px, y + h - 1.5 * u, n.drum === 'kick' ? r * 1.4 : n.drum === 'snare' ? r : r * .6, 0, 7); c.stroke(); }
+    else if (n.v === 3) { c.fillStyle = alpha(OC[3], .35 * fade); c.beginPath(); c.roundRect(px - .8 * u, Y(n.notes[2]) - u, 1.6 * u, Y(n.notes[0]) - Y(n.notes[2]) + 2 * u, .8 * u); c.fill(); }
+    else { c.fillStyle = alpha(OC[n.v], fade); c.beginPath(); c.arc(px, Y(n.notes[0]), r, 0, 7); c.fill(); }
+    c.restore();
+  }
+}
+function hybridE(c, W, H) {
+  const u = H / 100; organicGround(c, W, H, u, 'connect  ·  simulating  ·  beats  ·  soft kit');
+  const R = Math.min(W * .055, H * .1), cy = H * .3;
+  for (let i = 0; i < 4; i++) {
+    const cx = W * (.14 + .24 * i), on = S.finger[i];
+    blob(c, cx, cy, R * (on ? .85 + .15 * S.level[i] + .22 * S.flash[i] : .8), i);
+    for (const n of S.notes) if (n.v === 0 && i === 0 && S.t - n.t < 1.2) { const a = (S.t - n.t) / 1.2; c.strokeStyle = alpha(OC[0], (1 - a) * .6 * n.vel); c.lineWidth = 1.5; c.beginPath(); c.arc(cx, cy, R * (1 + a), 0, 7); c.stroke(); }
+    c.textAlign = 'center';
+    c.font = `${10 * u}px Fraunces, Georgia, serif`; c.fillStyle = on ? '#f4ecff' : 'rgba(244,236,255,.3)'; c.fillText(bpmText(i), cx, cy + R + 8 * u);
+    c.font = `italic ${2.6 * u}px Fraunces, Georgia, serif`; c.fillStyle = alpha(OC[i], .95); c.fillText(on ? `${VOICES[i]} · bpm` : `${VOICES[i]} · rest a finger on sensor ${i + 1}`, cx, cy + R + 14 * u);
+    c.textAlign = 'left';
+    if (on) softTrace(c, i, cx - W * .1, cy + R + 16 * u, W * .2, 9 * u, u);
+  }
+  notesLane(c, 3 * u, H * .74, W - 6 * u, H * .23, u);
+}
+function hybridF(c, W, H) {
+  const u = H / 100; organicGround(c, W, H, u, 'connect  ·  simulating  ·  beats  ·  soft kit');
+  const top = 12 * u, lane = 22 * u, rH = (H - top - lane - 3 * u) / 4;
+  for (let i = 0; i < 4; i++) {
+    const y = top + i * rH, cy = y + rH / 2, on = S.finger[i], r = rH * .3;
+    c.strokeStyle = 'rgba(244,236,255,.07)'; c.lineWidth = 1; c.beginPath(); c.moveTo(3 * u, y); c.lineTo(W - 3 * u, y); c.stroke();
+    blob(c, 3 * u + r * 1.3, cy, r * (on ? .85 + .15 * S.level[i] + .25 * S.flash[i] : .8), i);
+    c.font = `italic ${2.8 * u}px Fraunces, Georgia, serif`; c.fillStyle = alpha(OC[i], on ? 1 : .6); c.fillText(VOICES[i], 3 * u + r * 2.8, y + 3 * u);
+    const tx = 3 * u + r * 2.8, tw = W * .7 - tx;
+    if (on) softTrace(c, i, tx, y + 4 * u, tw, rH - 5 * u, u);
+    else { c.font = `italic ${2.4 * u}px Fraunces, Georgia, serif`; c.fillStyle = 'rgba(244,236,255,.5)'; c.fillText(`rest a finger on sensor ${i + 1}`, tx, cy + 1.5 * u); }
+    c.textAlign = 'right'; c.font = `${rH * .62}px Fraunces, Georgia, serif`; c.fillStyle = on ? '#f4ecff' : 'rgba(244,236,255,.3)'; c.fillText(bpmText(i), W - 9 * u, cy + u);
+    c.font = `600 ${2 * u}px Nunito, system-ui, sans-serif`; c.fillStyle = alpha(OC[i], .9); c.fillText('bpm', W - 3 * u, cy + rH * .2); c.textAlign = 'left';
+  }
+  notesLane(c, 3 * u, H - lane - 1 * u, W - 6 * u, lane, u);
+}
+
+// ---------- D: printed chart recorder ----------
+let paper = null;
+function paperPattern(c) {
+  if (paper) return paper;
+  const p = document.createElement('canvas'); p.width = p.height = 160; const x = p.getContext('2d'), d = x.createImageData(160, 160);
+  for (let k = 0; k < d.data.length; k += 4) { const n = 236 + Math.random() * 14; d.data[k] = n + 3; d.data[k + 1] = n; d.data[k + 2] = n - 8; d.data[k + 3] = 255; }
+  x.putImageData(d, 0, 0); return (paper = c.createPattern(p, 'repeat'));
+}
+function printed(c, W, H) {
+  const K = ['#1d1d1f', '#c3341f', '#1f4c9c', '#2d7a40'], u = H / 100, M = (s, w = 400) => `${w} ${s}px "IBM Plex Mono", monospace`, SER = (s) => `${s}px "Instrument Serif", Georgia, serif`;
+  c.fillStyle = paperPattern(c); c.fillRect(0, 0, W, H);
+  c.textBaseline = 'alphabetic'; c.font = SER(7 * u); c.fillStyle = K[0]; c.fillText('trackPrint', 3 * u, 8.5 * u);
+  c.font = M(2 * u); c.fillStyle = '#55524b'; c.textAlign = 'right';
+  c.fillText('CHART 014 · 14 NOV 2026 · 25 mm/s · SIMULATED   [connect sensors]  [simulate]  beats ▾  basic ▾', W - 3 * u, 8 * u); c.textAlign = 'left';
+  c.strokeStyle = K[0]; c.lineWidth = 1; c.beginPath(); c.moveTo(3 * u, 11 * u); c.lineTo(W - 3 * u, 11 * u); c.stroke();
+  const lx = 3 * u, lw = W * .64, top = 13 * u, lh = (H - top - 3 * u) / 4;
+  for (let i = 0; i < 4; i++) {
+    const y = top + i * lh, on = S.finger[i];
+    const st = lh / 10;
+    for (let k = 0; k * st <= lh - 2; k++) { c.strokeStyle = k % 5 ? 'rgba(80,140,130,.16)' : 'rgba(80,140,130,.34)'; c.beginPath(); c.moveTo(lx, y + k * st); c.lineTo(lx + lw, y + k * st); c.stroke(); }
+    const off = (S.t * 25 * u / 10) % st;
+    for (let k = 0, x = lx + lw - off; x > lx; k++, x -= st) { c.strokeStyle = 'rgba(80,140,130,.16)'; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + lh - 2); c.stroke(); }
+    c.font = M(1.9 * u, 500); c.fillStyle = K[i]; c.fillText(`CH${i} · ${VOICES[i].toUpperCase()}`, lx + .8 * u, y + 2.6 * u);
+    c.textAlign = 'right'; c.font = SER(5 * u); c.fillText(bpmText(i), lx + lw - 5 * u, y + 5 * u); c.font = M(1.7 * u); c.fillText('bpm', lx + lw - .8 * u, y + 5 * u); c.textAlign = 'left';
+    if (on) {
+      c.strokeStyle = K[i]; c.lineWidth = Math.max(1.2, .3 * u); c.lineJoin = 'round'; traceScroll(c, i, lx, y + 3 * u, lw, lh - 4 * u);
+      const b = S.beat[i];
+      for (let k = 0; k < N; k++) if (b[(S.head + k) % N]) { const x = lx + k / (N - 1) * lw; c.fillStyle = K[i]; c.fillRect(x - .5, y + lh - 2.2 * u, 1.5, 1.6 * u); }
+      const m = bufMax(S.buf[i]), v = S.buf[i][(S.head + N - 1) % N] / m, py = y + 3 * u + (lh - 4 * u) * .82 - v * (lh - 4 * u) * .7;
+      c.fillStyle = K[i]; c.beginPath(); c.moveTo(lx + lw, py); c.lineTo(lx + lw + 1.6 * u, py - .9 * u); c.lineTo(lx + lw + 1.6 * u, py + .9 * u); c.fill();
+    } else {
+      c.strokeStyle = K[i]; c.lineWidth = 1; c.beginPath(); c.moveTo(lx, y + lh * .78); c.lineTo(lx + lw, y + lh * .78); c.stroke();
+      c.font = `italic ${SER(3 * u)}`; c.fillStyle = K[i]; c.textAlign = 'center'; c.fillText(`no finger on sensor ${i + 1}`, lx + lw / 2, y + lh * .55); c.textAlign = 'left';
+    }
+  }
+  const sx = W * .7, sw = W - 3 * u - sx, sy = top, sh = H - top - 3 * u;
+  c.strokeStyle = K[0]; c.lineWidth = 1; c.strokeRect(sx, sy, sw, sh);
+  c.font = M(1.9 * u, 500); c.fillStyle = K[0]; c.fillText('NOTES', sx + 1.2 * u, sy + 3 * u);
+  const yp = (m) => sy + sh * .78 - (m - 42) / 46 * sh * .66;
+  for (let k = 0; k < 5; k++) { c.strokeStyle = 'rgba(29,29,31,.18)'; c.beginPath(); c.moveTo(sx, yp(52 + k * 6)); c.lineTo(sx + sw, yp(52 + k * 6)); c.stroke(); }
+  const X = (n) => sx + sw - 1.5 * u - (S.t - n.t) / 6 * (sw - 3 * u);
+  let prev = null; c.lineWidth = 1;
+  for (const n of S.notes) {
+    const x = X(n);
+    if (n.v === 2) { if (prev) { c.strokeStyle = alpha(K[2], .6); c.beginPath(); c.moveTo(prev[0], prev[1]); c.lineTo(x, yp(n.notes[0])); c.stroke(); } prev = [x, yp(n.notes[0])]; }
+  }
+  for (const n of S.notes) {
+    const x = X(n), r = (.5 + .5 * n.vel) * u; c.fillStyle = K[n.v]; c.strokeStyle = K[n.v];
+    if (n.v === 0) {
+      const y = sy + sh * .86;
+      if (n.drum === 'kick') { c.beginPath(); c.arc(x, y, r * 1.2, 0, 7); c.fill(); }
+      else if (n.drum === 'snare') c.fillRect(x - r, y - r - 2 * u, r * 2, r * 2);
+      else { c.lineWidth = 1.4; c.beginPath(); c.moveTo(x - r, y - 4 * u - r); c.lineTo(x + r, y - 4 * u + r); c.moveTo(x + r, y - 4 * u - r); c.lineTo(x - r, y - 4 * u + r); c.stroke(); c.lineWidth = 1; }
+    } else if (n.v === 3) { c.beginPath(); c.moveTo(x, yp(n.notes[0])); c.lineTo(x, yp(n.notes[2])); c.stroke(); n.notes.forEach((m) => { c.beginPath(); c.arc(x, yp(m), r, 0, 7); c.stroke(); }); }
+    else { c.beginPath(); c.arc(x, yp(n.notes[0]), r, 0, 7); c.fill(); }
+  }
+  const hy = sy + sh - 1 * u, bw = (sw - 2.4 * u) / 64;
+  c.fillStyle = 'rgba(29,29,31,.55)';
+  for (let k = 0; k < 64; k++) { const h = S.fft[k] * sh * .07; c.fillRect(sx + 1.2 * u + k * bw, hy - h, Math.max(1, bw - 1), h); }
+}
+
+// ---------- loop ----------
+const views = [['E', hybridE], ['F', hybridF], ['A', clinical], ['B', club], ['C', organic], ['D', printed]].map(([id, draw]) => {
+  const cv = document.getElementById(id), c = cv.getContext('2d'), v = { cv, c, draw, W: 0, H: 0 };
+  new ResizeObserver(() => { const dpr = devicePixelRatio || 1, r = cv.getBoundingClientRect(); v.W = r.width; v.H = r.height; cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); c.setTransform(dpr, 0, 0, dpr, 0, 0); }).observe(cv);
+  return v;
+});
+let paused = false, last = performance.now(), acc = 0;
+for (let k = 0; k < 250; k++) step(); // start mid-session so traces are full
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if (!paused) { acc += dt; while (acc >= .02) { step(); acc -= .02; } tickVisual(dt); }
+  for (const v of views) if (v.W) { v.c.save(); v.draw(v.c, v.W, v.H); v.c.restore(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+const pb = document.getElementById('pause');
+pb.onclick = () => { paused = !paused; pb.textContent = paused ? 'Play' : 'Pause'; pb.setAttribute('aria-pressed', paused); };
+</script>

@@ -6,6 +6,8 @@
 
 **Owner:** Teammate B. **Branch:** `visuals`, off `main` after the [foundation](2026-11-14-trackprint-foundation.md) merges.
 
+**Design decided:** [`../specs/2026-11-14-trackprint-visuals-design.md`](../specs/2026-11-14-trackprint-visuals-design.md) ("Organic stage", mockup E). B1 Step 1 is done; every later step follows that spec.
+
 **Goal:** make trackPrint look and feel like an instrument: the page, the controls, how it behaves in every state, and visuals that move with the players' pulses and with the music.
 
 **Files you own:** `web/index.html`, `web/ui/**` (`ui.js`, `style.css`, and any canvas modules, fonts or images you add). You may append your own section to `web/test.mjs` if you write pure helpers worth testing. Anything else in `web/` is shared (contract branch only) or the sound teammate's.
