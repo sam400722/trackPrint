@@ -39,14 +39,26 @@ export async function connectSerial(onFrame, onClose) {
   };
 }
 
+// Simulated IR: dips on each pulse, sitting on a ~100k DC level, plus sensor noise.
+const SIM_BPMS = [72, 64, 88, 58];
+const simSample = (ch, t) =>
+  Math.round(100000 - 400 * Math.sin((2 * Math.PI * SIM_BPMS[ch] * t) / 60) + Math.random() * 40);
+
 export function startSim(onFrame) {
-  const bpms = [72, 64, 88, 58];
   let i = 0;
   const id = setInterval(() => {
     const t = i++ / 50;
-    // IR dips on each pulse, sitting on a ~100k DC level, plus sensor noise
-    onFrame(bpms.map((b) =>
-      Math.round(100000 - 400 * Math.sin((2 * Math.PI * b * t) / 60) + Math.random() * 40)));
+    onFrame(SIM_BPMS.map((_, ch) => simSample(ch, t)));
   }, 20);
   return () => clearInterval(id);
+}
+
+// Wrap a frame callback so channels whose sensor is missing (the firmware reports
+// those as 0) get simulated pulses. Real channels pass through untouched.
+export function simFill(onFrame) {
+  let i = 0;
+  return (raws) => {
+    const t = i++ / 50;
+    onFrame(raws.map((r, ch) => (r === 0 ? simSample(ch, t) : r)));
+  };
 }

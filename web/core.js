@@ -1,6 +1,6 @@
 // Sources -> per-channel signal -> 'frame' events. Owns connect/simulate and status.
 import { emit, on, VOICES } from './bus.js';
-import { connectSerial, startSim } from './serial.js';
+import { connectSerial, simFill, startSim } from './serial.js';
 import { createChannel } from './signal.js';
 
 let stop = null;
@@ -31,6 +31,9 @@ export function start(source) {
 }
 
 const go = (source) => () => start(source).catch((e) => emit('status', `error: ${e.message}`));
-on('connect', go(connectSerial));
+// Open the page with ?fill=sim to simulate every channel whose sensor isn't plugged in.
+// Read at click time, not import time, so Node can still load this module.
+const fillMissing = () => new URLSearchParams(globalThis.location?.search).get('fill') === 'sim';
+on('connect', go((onFrame, onClose) => connectSerial(fillMissing() ? simFill(onFrame) : onFrame, onClose)));
 on('simulate', go(startSim));
 emit('status', 'idle');
