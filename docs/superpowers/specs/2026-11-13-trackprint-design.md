@@ -27,6 +27,14 @@ Decisions made in brainstorming:
 - `voices.js`: Tone.js instruments. Drums use MembraneSynth plus NoiseSynth for kick, snare and hat. Bass uses MonoSynth. Lead uses Synth with vibrato. Pad uses PolySynth with a slow filter. Each has `trigger(params)`.
 - `index.html` and `main.js`: Connect and Simulate buttons, mode toggle, and four small live meters (signal, BPM, finger-on).
 
+## Team split
+Two teammates build the browser app in parallel after a shared foundation (firmware, `serial.js`, `signal.js`, and a working stub of everything).
+- `bus.js`: the contract. A native `EventTarget` with `emit`/`on` and a fixed event table (`frame`, `status`, `connect`, `simulate`, `mode`, `kit`, `kits`, `analyser`, `note`). Audio and UI never import each other.
+- `core.js` (shared): sources → `signal.js` → `frame` events; handles `connect`/`simulate`; emits `status`.
+- `audio/` (sound teammate): `mapping.js`, `kits.js` (the voices above, as switchable kits), `audio.js` (mode gate, master chain, analysers; emits `note`).
+- `ui/` and `index.html` (visuals teammate): controls, states, aesthetic, and visuals driven by `frame`, `note` and `analyser`.
+- Plans: `docs/superpowers/plans/2026-11-14-trackprint.md` (overview, contract, branching) plus the foundation, sound and visuals plans.
+
 ## Error handling
 - Serial disconnect: show status, voices go silent.
 - Finger off: that voice mutes and the others continue.
