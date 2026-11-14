@@ -160,15 +160,74 @@ const BASS = {
 };
 
 // ---------------------------------------------------------------- lead
+// type 'synth': Synth (any oscillator, `spread` makes it a 3-voice fat one) through
+//               a low-pass that follows cutoff.
+// type 'fm':    FMSynth, bell / electric-piano family; cutoff ignored.
+// type 'pluck': PluckSynth; cutoff sets the string dampening. Ignores velocity.
+// Optional `vibrato` {rate, depth} and `delay` {time, feedback, send (dB), pingpong}.
 function lead(ctx, o) {
-  const vibrato = ctx.add(new Tone.Vibrato(5, 0.1));
-  sends(ctx, vibrato, o);
-  const syn = ctx.add(new Tone.Synth({ oscillator: { type: o.osc ?? 'square' }, volume: o.level })).connect(vibrato);
+  const { add } = ctx;
+  const bus = gain(add, o.level);
+  sends(ctx, bus, o);
+  if (o.delay) {
+    const Delay = o.delay.pingpong ? Tone.PingPongDelay : Tone.FeedbackDelay;
+    const delay = add(new Delay({ delayTime: o.delay.time, feedback: o.delay.feedback, wet: 1 }));
+    bus.connect(gain(add, o.delay.send).connect(delay));
+    sends(ctx, delay, o); // echoes go to the reverb too, so they sit in the same room
+  }
+  let head = bus;
+  if (o.vibrato) head = add(new Tone.Vibrato(o.vibrato.rate, o.vibrato.depth)).connect(head);
+  const glide = o.glide ?? 0;
+  let syn, setTone = () => {};
+  if (o.type === 'pluck') {
+    syn = add(new Tone.PluckSynth({ attackNoise: 1.5, dampening: 4000, resonance: 0.97, release: 1.5 }));
+    setTone = (c) => (syn.dampening = 1500 + c * 2); // 1.9..6.4 kHz
+  } else if (o.type === 'fm') {
+    syn = add(new Tone.FMSynth({
+      harmonicity: o.harmonicity ?? 3, modulationIndex: o.index ?? 4, portamento: glide,
+      envelope: { attack: 0.005, decay: o.decay ?? 0.6, sustain: 0.15, release: 0.8 },
+      modulationEnvelope: { attack: 0.002, decay: 0.3, sustain: 0, release: 0.4 },
+    }));
+  } else {
+    const filter = add(new Tone.Filter({ type: 'lowpass', frequency: 3000, Q: 1 })).connect(head);
+    head = filter;
+    syn = add(new Tone.Synth({
+      oscillator: o.spread ? { type: o.osc, count: 3, spread: o.spread } : { type: o.osc ?? 'square' },
+      portamento: glide,
+      envelope: { attack: 0.005, decay: 0.2, sustain: 0.4, release: 0.3 },
+    }));
+    setTone = (c, t) => filter.frequency.setTargetAtTime(800 + c * 2.5, t, 0.03); // 1.3..6.9 kHz
+  }
+  syn.connect(head);
+  const dur = o.dur ?? '8n';
   return {
-    play(p, t) { syn.triggerAttackRelease(midi(p.notes[0]), '8n', t, p.velocity); },
+    play(p, t) {
+      setTone(p.cutoff, t);
+      syn.triggerAttackRelease(midi(p.notes[0]), dur, t, p.velocity);
+    },
     silence() { syn.triggerRelease(); },
   };
 }
+
+const LEAD = {
+  square: {
+    type: 'synth', osc: 'fatsquare', spread: 12, glide: 0.015, dur: '8n',
+    vibrato: { rate: 5, depth: 0.06 },
+    delay: { pingpong: true, time: '8n.', feedback: 0.3, send: -8 },
+    verb: -12, level: -16,
+  },
+  keys: {
+    type: 'fm', harmonicity: 3, index: 2.5, decay: 0.9, dur: '8n',
+    vibrato: { rate: 4.5, depth: 0.12 }, // tape wobble
+    delay: { time: '4n', feedback: 0.25, send: -10 },
+    verb: -10, level: -12,
+  },
+  pluck: {
+    type: 'pluck', dur: '4n',
+    delay: { pingpong: true, time: '4n.', feedback: 0.45, send: -6 },
+    verb: -4, level: -6,
+  },
+};
 
 // ---------------------------------------------------------------- pad
 function pad(ctx, o) {
@@ -216,7 +275,7 @@ const BASIC = {
   reverb: { decay: 3, wet: 1 },
   drums: DRUMS.punchy,
   bass: BASS.saw,
-  lead: { level: -14, verb: -6 },
+  lead: LEAD.square,
   pad: { level: -20, verb: -3 },
 };
 
@@ -226,7 +285,7 @@ export const KITS = {
   test: makeKit({
     ...BASIC,
     bass: BASS.fm,
-    lead: { ...BASIC.lead, osc: 'triangle' },
+    lead: LEAD.pluck,
     pad: { ...BASIC.pad, osc: 'fattriangle' },
   }),
 };
