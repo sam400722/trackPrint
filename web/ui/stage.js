@@ -34,12 +34,12 @@ const COL = { other: tok('--other'), text: tok('--text'), muted: tok('--muted'),
 COL.v = Object.assign(Object.create(null), ...VOICES.map((v, i) => ({ [v]: COLS[i] }))); // null prototype: 'constructor' etc. fall back to --other
 COL.lead = COL.v.lead;
 
-const err = $('err');
+const err = $('err'), text = $('text');
 const fluid = createFluid($('gl'), COLS.map(hex3), (msg) => { err.textContent += (err.textContent ? '\n' : '') + msg; });
 
 const P = VOICES.map((v, i) => {
   const bpm = document.createElement('div'), lab = document.createElement('div');
-  bpm.className = 'bpm'; lab.className = 'lab'; $('text').append(bpm, lab);
+  bpm.className = 'bpm'; lab.className = 'lab'; text.append(bpm, lab);
   return { v, i, col: COLS[i], bpm, lab, f: newField(), pres: 0, m: 0, cx: 0, trace: null,
     buf: new Float32Array(N), head: 0, count: 0, max: 1, beat: false };
 });
@@ -68,13 +68,13 @@ on('frame', (f) => {
 });
 
 // layout, recomputed on resize
-let W = 0, H = 0, u = 1, dpr = 1;
+let W = 0, H = 0, u = 1, dpr = 1, gen = 0; // gen counts resizes, so text is re-placed after one
 function resize() {
   const b = cv.getBoundingClientRect();
   W = b.width; H = b.height; u = H / 100; dpr = Math.min(devicePixelRatio || 1, 2);
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  fluid?.resize(W, H, dpr);
+  fluid?.resize(W, H, dpr); gen++;
   const colW = W / 4, tw = colW * .56;
   P.forEach((p, i) => { // trace gradients only depend on the column, so build them here
     p.cx = colW * (i + .5);
@@ -86,7 +86,7 @@ new ResizeObserver(resize).observe(cv);
 
 const UB = new Float32Array(15), US = new Float32Array(16), ULf = new Float32Array(4), UFl = new Float32Array(4);
 const ready = [false, false, false, false], bumps = [false, false, false, false];
-let st = { merged: false, upAt: null }, prog = 0, prev = 0;
+let st = { merged: false, upAt: null }, prog = 0, prev = 0, lastFade = -1;
 
 function loop(ms) {
   requestAnimationFrame(loop);
@@ -119,16 +119,21 @@ function loop(ms) {
     UB.set([x * dpr, (H - cy) * dpr, Rr * sc * dpr], i * 3);
     US.set([reduce ? 0 : Math.max(f.F, 0), reduce ? 0 : Math.max(f.L, 0), reduce ? 0 : f.rip, p.pres], i * 4); ULf[i] = reduce ? f.lift : 0; UFl[i] = reduce ? 0 : f.fl;
     const tx = lerp(cx, bx + TXO, m), sh = `translate(${-50 * (1 - m)}%, -50%)`;
-    p.bpm.textContent = ready[i] ? Math.round(p.ch.bpm) : '--';
-    p.bpm.classList.toggle('off', !ready[i]);
-    p.lab.textContent = (p.down ? `${p.v} · bpm` : `rest a finger on sensor ${i + 1}`) + (live && i === sensorCh ? ' · sensor' : '');
-    Object.assign(p.bpm.style, { left: `${tx}px`, top: `${lerp(62, 73, m) * u}px`, fontSize: `${lerp(9, 4.4, m) * u}px`, transform: sh });
-    Object.assign(p.lab.style, { left: `${tx}px`, top: `${lerp(69, 76.8, m) * u}px`, fontSize: `${lerp(2.1, 1.7, m) * u}px`, transform: sh });
+    // the DOM is only written when a value changes: an unchanged frame costs no style or layout work
+    const bt = ready[i] ? String(Math.round(p.ch.bpm)) : '--';
+    if (bt !== p.bt) { p.bpm.textContent = p.bt = bt; p.bpm.classList.toggle('off', !ready[i]); }
+    const lt = (p.down ? `${p.v} · bpm` : `rest a finger on sensor ${i + 1}`) + (live && i === sensorCh ? ' · sensor' : '');
+    if (lt !== p.lt) p.lab.textContent = p.lt = lt;
+    if (m !== p.pm || gen !== p.gen) { // moved (slide) or resized
+      p.pm = m; p.gen = gen;
+      Object.assign(p.bpm.style, { left: `${tx}px`, top: `${lerp(62, 73, m) * u}px`, fontSize: `${lerp(9, 4.4, m) * u}px`, transform: sh });
+      Object.assign(p.lab.style, { left: `${tx}px`, top: `${lerp(69, 76.8, m) * u}px`, fontSize: `${lerp(2.1, 1.7, m) * u}px`, transform: sh });
+    }
     p.m = m;
   }
   const Rg = RB * big, cyB = Math.min(Math.max(38 * u, 13 * u + Rg), 62 * u - Rg);   // merged blob centre y, kept inside its band
   UB.set([W / 2 * dpr, (H - cyB) * dpr, big > .02 ? Rg * dpr : 0], 12);
-  $('text').style.opacity = fade;
+  if (fade !== lastFade) text.style.opacity = lastFade = fade;
   fluid?.frame({ t, dt, fade, rm: reduce, blobs: UB, state: US, lift: ULf, flash: UFl,
     dye: prog > .05 ? { x: W / 2, y: 38 * u, cyB, RW, big, bumps } : null });
 
