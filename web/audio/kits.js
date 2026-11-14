@@ -109,7 +109,13 @@ function drums(ctx, o) {
   })).connect(bus);
 
   // Envelope times are read when a trigger is scheduled, so setting them first is sample-accurate.
-  return (p, t) => {
+  const brightness = (heart, t) => {
+    const level = Math.min(1, Math.max(0, (heart?.press ?? 0.5)));
+    const cutoff = Math.min(18000, Math.max(3500, (o.brightness ?? 9000) * (0.75 + 0.5 * level)));
+    hatLp.frequency.setTargetAtTime(cutoff, t, 0.1);
+    bus.gain.setTargetAtTime(Math.min(1.2, Math.max(0.35, 0.7 + 0.4 * level)), t, 0.1);
+  };
+  const play = (p, t) => {
     const v = p.velocity;
     switch (p.drum) {
       case 'kick':
@@ -138,6 +144,7 @@ function drums(ctx, o) {
         hatHit(H.closed * (0.7 + 0.6 * v), t, v * 0.7);
     }
   };
+  return { play, update: brightness };
 }
 
 const DRUMS = {
@@ -183,6 +190,7 @@ function bass(ctx, o) {
   const { add } = ctx;
   const bus = gain(add, o.level);
   sends(ctx, bus, o);
+  const character = add(new Tone.Filter({ type: 'lowpass', frequency: o.filter ?? 900, Q: o.q ?? 2 })).connect(bus);
   const glide = o.glide ?? 0;
   let syn, setTone = () => {};
   if (o.type === 'fm') {
@@ -192,7 +200,7 @@ function bass(ctx, o) {
       envelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.3 },
       modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.3 },
     }));
-    setTone = (hr, t) => syn.modulationIndex.setValueAtTime(hrLin(hr, 1.5, 8), t);
+    setTone = (hr, t) => syn.modulationIndex.setValueAtTime(hrLin(hr, o.fmLo ?? 1.5, o.fmHi ?? 8), t);
   } else if (o.type === 'soft') {
     syn = add(new Tone.Synth({
       oscillator: { type: o.osc ?? 'triangle' }, portamento: glide,
@@ -205,12 +213,16 @@ function bass(ctx, o) {
       envelope: { attack: 0.005, decay: 0.3, sustain: 0.6, release: 0.25 },
       filterEnvelope: { attack: 0.005, decay: 0.25, sustain: 0.25, release: 0.3, baseFrequency: 150, octaves: o.octaves ?? 2.5 },
     }));
-    setTone = (hr) => (syn.filterEnvelope.baseFrequency = hrLin(hr, 100, 600));
+    setTone = (hr, t) => {
+      const cutoff = hrLin(hr, o.filterLo ?? 100, o.filterHi ?? 600);
+      syn.filterEnvelope.baseFrequency = cutoff;
+      character.frequency.setTargetAtTime(cutoff, t, 0.1);
+    };
   }
   // At press 0 the distortion is fully dry: Tone's curve at amount 0 isn't unity gain.
   // Tone's curve squashes a full-level input by ~8 dB, so drive it 10 dB lower and
   // make up 10 dB after: unity when dry, gentle saturation and similar level when wet.
-  const post = gain(add, 10).connect(bus);
+  const post = gain(add, 10).connect(character);
   const dist = add(new Tone.Distortion({ distortion: 0, wet: 0, oversample: '2x' })).connect(post);
   syn.connect(gain(add, -10).connect(dist));
   const sub = o.sub == null ? null : add(new Tone.Synth({
@@ -218,16 +230,21 @@ function bass(ctx, o) {
     envelope: { attack: 0.005, decay: 0.2, sustain: 0.8, release: 0.25 }, volume: o.sub,
   })).connect(bus);
   const dur = o.dur ?? '8n';
+  const update = (heart, t) => {
+    const grit = Math.min(0.35, Math.max(0, 0.4 * (heart.press ?? 0.5) * (o.grit ?? 1)));
+    dist.distortion = grit;
+    dist.wet.setTargetAtTime(Math.min(1, Math.max(0, grit / 0.2)), t, 0.1);
+    setTone(heart.hr, t);
+  };
   return {
     play(p, heart, t) {
       const n = midi(p.notes[0]);
-      const grit = 0.4 * heart.press * (o.grit ?? 1);
-      dist.distortion = grit;
-      dist.wet.setValueAtTime(Math.min(1, grit / 0.2), t);
-      setTone(heart.hr, t);
-      syn.triggerAttackRelease(n, dur, t, p.velocity);
-      sub?.triggerAttackRelease(n, dur, t, 0.5 + 0.5 * p.velocity);
+      update(heart, t);
+      const length = p.duration ?? dur;
+      syn.triggerAttackRelease(n, length, t, p.velocity);
+      sub?.triggerAttackRelease(n, length, t, 0.5 + 0.5 * p.velocity);
     },
+    update,
     silence() { syn.triggerRelease(); sub?.triggerRelease(); },
   };
 }
@@ -249,10 +266,12 @@ function lead(ctx, o) {
   const { add } = ctx;
   const bus = gain(add, o.level);
   sends(ctx, bus, o);
+  let echoSend = null;
   if (o.delay) {
     const Delay = o.delay.pingpong ? Tone.PingPongDelay : Tone.FeedbackDelay;
     const delay = add(new Delay({ delayTime: o.delay.time, feedback: o.delay.feedback, wet: 1 }));
-    bus.connect(gain(add, o.delay.send).connect(delay));
+    echoSend = gain(add, o.delay.send);
+    bus.connect(echoSend.connect(delay));
     sends(ctx, delay, o); // echoes go to the reverb too, so they sit in the same room
   }
   let head = bus;
@@ -280,8 +299,14 @@ function lead(ctx, o) {
   const dur = o.dur ?? '8n';
   return {
     play(p, heart, t) {
-      lp.frequency.setTargetAtTime(hrExp(heart.hr, 400, 4000), t, 0.03);
+      const brightness = Math.min(8000, Math.max(500, hrExp(heart.hr, o.brightLo ?? 400, o.brightHi ?? 4000)));
+      lp.frequency.setTargetAtTime(brightness, t, 0.1);
       syn.triggerAttackRelease(midi(p.notes[0]), p.duration ?? dur, t, p.velocity);
+    },
+    update(heart, t) {
+      const brightness = Math.min(8000, Math.max(500, hrExp(heart.hr, o.brightLo ?? 400, o.brightHi ?? 4000)));
+      lp.frequency.setTargetAtTime(brightness, t, 0.1);
+      if (echoSend) echoSend.gain.setTargetAtTime(Math.min(1, Math.max(0, (o.echoBase ?? 0.2) + 0.15 * (heart.breath ?? 0))), t, 0.1);
     },
     silence() { syn.triggerRelease(); },
   };
@@ -343,10 +368,12 @@ function pad(ctx, o) {
   syn.maxPolyphony = 16;
   return {
     play(p, heart, t) {
-      syn.triggerAttackRelease(p.notes.map(midi), o.hold ?? 2.5, t, 0.3 + 0.5 * p.velocity);
+      syn.triggerAttackRelease(p.notes.map(midi), p.duration ?? o.hold ?? 2.5, t, 0.3 + 0.5 * p.velocity);
     },
     update(heart, t) {
-      lp.frequency.rampTo(hrExp(heart.hr, 300, 3000) * 2 ** heart.breath, 0.1, t);
+      const cutoff = Math.min(6000, Math.max(250, hrExp(heart.hr, o.filterLo ?? 300, o.filterHi ?? 3000) * 2 ** Math.max(-1, Math.min(1, heart.breath ?? 0))));
+      lp.frequency.rampTo(cutoff, 0.1, t);
+      if (o.motion && lp.wet) lp.wet.rampTo(Math.min(1, Math.max(0, 0.35 + 0.25 * (heart.press ?? 0.5))), 0.1, t);
     },
     silence() { syn.releaseAll(); },
   };
@@ -377,17 +404,31 @@ function makeKit(spec) {
     const add = (n) => (nodes.push(n), n);
     const dest = spec.bus ? spec.bus(add, out) : out;
     const verb = add(new Tone.Reverb(spec.reverb)).connect(dest);
-    const ctx = { add, dest, verb };
+    const pump = spec.pump ? add(new Tone.Gain(1)).connect(dest) : null;
+    const voiceDest = pump ?? dest;
+    const ctx = { add, dest: voiceDest, verb };
     const d = drums(ctx, spec.drums);
     const b = bass(ctx, spec.bass);
     const l = lead(ctx, spec.lead);
     const p = pad(ctx, spec.pad);
     return {
-      drums: (params, heart, t) => d(params, t),
+      drums: (params, heart, t) => d.play(params, t),
       bass: b.play,
       lead: l.play,
       pad: p.play,
-      update(hearts, t) { p.update(hearts.pad, t); },  // continuous, every 16th step
+      update(hearts, t, stepInBar = 0) {
+        d.update(hearts.drums, t);
+        b.update?.(hearts.bass, t);
+        l.update?.(hearts.lead, t);
+        p.update(hearts.pad, t);
+        if (pump) {
+          pump.gain.setValueAtTime(1, t);
+          if (stepInBar % 4 === 0) {
+            pump.gain.linearRampToValueAtTime(0.62, t + 0.03);
+            pump.gain.linearRampToValueAtTime(1, t + 0.18);
+          }
+        }
+      },
       lift(voice) { if (voice === 'pad') p.silence(); }, // finger lifted: pad releases now
       silence() { b.silence(); l.silence(); p.silence(); },
       dispose() { nodes.forEach((n) => n.dispose()); },
@@ -401,33 +442,41 @@ function makeKit(spec) {
 export const KITS = {
   // Clean, punchy electronic: tuned 808-style drums, saw bass with sub,
   // fat square lead with ping-pong echoes, moving supersaw pad.
-  pulse: makeKit({
-    tail: 4,
-    reverb: { decay: 2.5, preDelay: 0.02, wet: 1 },
-    drums: DRUMS.punchy,
-    bass: BASS.saw,
-    lead: LEAD.square,
-    pad: PAD.saw,
+  'French house': makeKit({
+    tail: 5,
+    pump: true,
+    reverb: { decay: 2.5, preDelay: 0.02, wet: 0.8 },
+    drums: { ...DRUMS.punchy, brightness: 10500 },
+    bass: { ...BASS.saw, filter: 1100, filterLo: 180, filterHi: 850, dur: '8n' },
+    lead: { ...LEAD.square, brightLo: 700, brightHi: 5200, echoBase: 0.24 },
+    pad: { ...PAD.saw, filterLo: 500, filterHi: 2600, hold: 1.5 },
   }),
   // Dusty and warm: whole kit low-passed at 4.5 kHz, crushed drums,
   // FM bass, wobbly electric-piano lead, soft AM pad.
-  lofi: makeKit({
+  'UK garage': makeKit({
     tail: 4,
-    bus: (add, out) => add(new Tone.Filter({ type: 'lowpass', frequency: 4500, rolloff: -12 })).connect(out),
-    reverb: { decay: 2, preDelay: 0.01, wet: 1 },
-    drums: DRUMS.dusty,
-    bass: BASS.fm,
-    lead: LEAD.keys,
-    pad: PAD.warm,
+    reverb: { decay: 2, preDelay: 0.01, wet: 0.75 },
+    drums: { ...DRUMS.dusty, brightness: 8500 },
+    bass: { ...BASS.fm, filter: 700, fmLo: 1.2, fmHi: 5.5, dur: '16n', level: -5 },
+    lead: { ...LEAD.keys, brightLo: 900, brightHi: 4300, echoBase: 0.14 },
+    pad: { ...PAD.warm, filterLo: 450, filterHi: 2200, hold: 1.25 },
   }),
   // Slow and spacious: soft brushed drums in an 8 s room, round bass,
   // plucks echoing on dotted quarters, airy pad.
-  ambient: makeKit({
+  Ambient: makeKit({
     tail: 10,
     reverb: { decay: 8, preDelay: 0.05, wet: 1 },
-    drums: DRUMS.soft,
-    bass: BASS.soft,
-    lead: LEAD.pluck,
-    pad: PAD.air,
+    drums: { ...DRUMS.soft, brightness: 7000 },
+    bass: { ...BASS.soft, filter: 500, filterLo: 90, filterHi: 360, dur: '2n' },
+    lead: { ...LEAD.pluck, brightLo: 500, brightHi: 3000, echoBase: 0.12 },
+    pad: { ...PAD.air, filterLo: 280, filterHi: 1800, hold: 5 },
+  }),
+  'Russian hardbass': makeKit({
+    tail: 3,
+    reverb: { decay: 1.2, preDelay: 0.01, wet: 0.55 },
+    drums: { ...DRUMS.punchy, brightness: 12500, level: -4 },
+    bass: { ...BASS.fm, filter: 1500, fmLo: 3, fmHi: 10, dur: '16n', grit: 0.8, level: -4 },
+    lead: { ...LEAD.square, brightLo: 1100, brightHi: 6500, echoBase: 0.08, level: -6 },
+    pad: { ...PAD.warm, filterLo: 700, filterHi: 3500, hold: 1.2, level: -9 },
   }),
 };

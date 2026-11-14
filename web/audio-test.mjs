@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { HEART_OFF } from './audio/heart.js';
 import { GENRES } from './audio/patterns.js';
 import { createTempo, songBpm } from './audio/tempo.js';
@@ -145,5 +147,80 @@ test('phrase evolution is reproducible, neutral while unsettled, and bounded', (
         }
       }
     }
+  }
+});
+
+test('kit boundaries expose four bounded, disposable, duration-aware kits', () => {
+  const source = readFileSync(new URL('./audio/kits.js', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '').replaceAll('export const KITS', 'const KITS') + '\nglobalThis.KITS = KITS;';
+  const nodes = [];
+  const automation = [];
+  const triggers = [];
+  class Param {
+    constructor(value = 0) { this.value = value; }
+    setValueAtTime(value, time) { automation.push({ method: 'set', value, time }); this.value = value; }
+    setTargetAtTime(value, time, constant) { automation.push({ method: 'target', value, time, constant }); this.value = value; }
+    linearRampToValueAtTime(value, time) { automation.push({ method: 'ramp', value, time }); this.value = value; }
+    rampTo(value, duration, time) { automation.push({ method: 'rampTo', value, duration, time }); this.value = value; }
+  }
+  class Node {
+    constructor(options = {}) {
+      this.options = options; this.disposals = 0; this.connections = [];
+      this.volume = new Param(options.volume ?? 0); this.wet = new Param(options.wet ?? 0);
+      this.gain = new Param(options.gain ?? 1);
+      this.modulationIndex = new Param(options.modulationIndex ?? 0);
+      this.frequency = new Param(options.frequency ?? 0); this.feedback = new Param(options.feedback ?? 0);
+      this.distortion = options.distortion ?? 0; this.envelope = { decay: 0 };
+      this.filterEnvelope = { baseFrequency: new Param(0) };
+      nodes.push(this);
+    }
+    connect(node) { this.connections.push(node); return node; }
+    dispose() { this.disposals++; }
+    start() { return this; }
+    triggerAttackRelease(...args) { triggers.push({ node: this, args }); }
+    triggerRelease() {}
+    releaseAll() {}
+  }
+  const ctor = function (options) { return new Node(options); };
+  const Tone = new Proxy({
+    Frequency: (value) => ({ toNote: () => `midi:${value}` }),
+    dbToGain: () => 1,
+  }, { get(target, key) {
+    if (key in target) return target[key];
+    return ctor;
+  }});
+  const env = { Tone, GENRES: {} };
+  runInNewContext(source, env);
+  const names = ['French house', 'UK garage', 'Ambient', 'Russian hardbass'];
+  assert.deepEqual(Object.keys(env.KITS), names);
+  const hearts = {
+    drums: { hr: 75, press: 0.5, breath: 0 },
+    bass: { hr: 80, press: 0.5, breath: 0 },
+    lead: { hr: 85, press: 0.5, breath: 0 },
+    pad: { hr: 70, press: 0.5, breath: 0 },
+  };
+  for (const name of names) {
+    const out = new Node();
+    const start = nodes.length;
+    const kit = env.KITS[name](out);
+    for (const method of ['drums', 'bass', 'lead', 'pad', 'update', 'lift', 'silence', 'dispose']) {
+      assert.equal(typeof kit[method], 'function', `${name}.${method}`);
+    }
+    kit.bass({ notes: [45], duration: 1.75, velocity: 0.8 }, hearts.bass, 1);
+    kit.lead({ notes: [60], duration: 2.25, velocity: 0.7 }, hearts.lead, 2);
+    kit.pad({ notes: [45, 49, 52], duration: 3.5, velocity: 0.6 }, hearts.pad, 3);
+    const noteTriggers = triggers.filter(({ args }) => args.some((arg) => arg === 1.75 || arg === 2.25 || arg === 3.5));
+    assert.ok(noteTriggers.length >= 3, `${name} forwards note durations`);
+    kit.update(hearts, 4, 0);
+    kit.update(hearts, 5, 4);
+    if (name === 'French house') {
+      assert.ok(automation.some((a) => a.time === 4 && a.value < 1), 'house beat dip');
+      assert.ok(automation.some((a) => a.time === 4 && a.value >= 0.9), 'house recovery');
+    }
+    kit.dispose();
+    nodes.slice(start).forEach((node) => assert.equal(node.disposals, 1, 'every kit node disposed once'));
+  }
+  for (const entry of automation) {
+    assert.ok(Number.isFinite(entry.value) && entry.value >= 0 && entry.value <= 18000, 'automation bounded');
   }
 });
