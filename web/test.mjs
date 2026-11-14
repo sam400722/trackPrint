@@ -60,6 +60,23 @@ assert.deepEqual([...Array(8).keys()].map((a) => mapVoice('drums', a << 2).drum)
 assert.deepEqual(mapVoice('pad', 0), { notes: [57, 62, 67, 72], velocity: 0.4, cutoff: 200 }); // A3 D4 G4 C5
 assert.deepEqual(mapVoice('bass', 0), { notes: [33], velocity: 0.4, cutoff: 200 });  // A1
 assert.deepEqual(mapVoice('bass', 7 << 2).notes, [50]);                               // top: D3
+{
+  // Every note any voice can play is in the scale, whatever the raw bits.
+  const { SCALE, ROOT, tempoFrom } = await import('./audio/mapping.js');
+  const inScale = (m) => SCALE.includes((((m - ROOT) % 12) + 12) % 12);
+  for (let raw = 0; raw < 1 << 16; raw += 7) {
+    for (const v of ['bass', 'lead', 'pad']) {
+      const p = mapVoice(v, raw);
+      assert.ok(p.notes.every(inScale), `${v} ${p.notes} off-scale for raw ${raw}`);
+      assert.ok(p.velocity >= 0.4 && p.velocity <= 1 && p.cutoff >= 200 && p.cutoff <= 2450);
+    }
+  }
+  const ch = (finger, bpm) => ({ finger, bpm, ac: 0, beat: false });
+  assert.equal(tempoFrom([ch(true, 70), ch(true, 80), ch(false, 0), ch(true, 0)]), 75); // ignores off and unread
+  assert.equal(tempoFrom([ch(false, 0), ch(false, 0)]), null);
+  assert.equal(tempoFrom([ch(true, 40)]), 60);
+  assert.equal(tempoFrom([ch(true, 190)]), 140);
+}
 console.log('mapping ok');
 
 import { on } from './bus.js';
