@@ -15,9 +15,16 @@ export async function start(source) {
   const me = (run = {});
   await stop?.();
   stop = null;
+  if (run !== me) return;
   channels = VOICES.map(() => createChannel(50));
-  stop = await source(onFrame, () => run === me && emit('status', 'disconnected'));
-  emit('status', 'running');
+  try {
+    const s = await source((raws) => run === me && onFrame(raws), () => run === me && emit('status', 'disconnected'));
+    if (run !== me) return void (await s?.());
+    stop = s;
+    emit('status', 'running');
+  } catch (e) {
+    if (run === me) throw e; // a superseded run's failure is not the current status
+  }
 }
 
 const go = (source) => () => start(source).catch((e) => emit('status', `error: ${e.message}`));

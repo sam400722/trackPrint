@@ -62,4 +62,23 @@ import { start } from './core.js';
   assert.deepEqual(Object.keys(got.ch[0]).sort(), ['ac', 'beat', 'bpm', 'finger']);
   assert.deepEqual(status, ['idle', 'running']);
 }
+{
+  // overlapping starts: A (slow) is superseded by B (fast)
+  const log = [];
+  on('status', (s) => log.push(s));
+  on('frame', () => log.push('frame'));
+  let aStopped = false, aFrame, aClose;
+  const A = (f, c) => new Promise((r) => setTimeout(() => { aFrame = f; aClose = c; r(async () => (aStopped = true)); }, 5));
+  const B = async () => async () => {};
+  log.length = 0;
+  const pa = start(A);
+  await new Promise((r) => setTimeout(r, 1)); // A is now inside source()
+  await start(B);
+  await pa;
+  aFrame([1, 2, 3, 4]);
+  aClose();
+  assert.ok(aStopped);
+  assert.deepEqual(log.filter((x) => x !== 'running'), []);
+  assert.equal(log.filter((x) => x === 'running').length, 1);
+}
 console.log('contract ok');
