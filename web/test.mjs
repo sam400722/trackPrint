@@ -57,7 +57,7 @@ assert.deepEqual(mapVoice('drums', ((15 << 6) | 1) << 2), { drum: 'hat', velocit
 assert.deepEqual(mapVoice('drums', 2 << 2).drum, 'snare');
 assert.deepEqual([...Array(8).keys()].map((a) => mapVoice('drums', a << 2).drum),
   ['kick', 'hat', 'snare', 'hat', 'kick', 'clap', 'openhat', 'tom']);
-assert.deepEqual(mapVoice('pad', 0), { notes: [57, 62, 67], velocity: 0.4, cutoff: 200 });
+assert.deepEqual(mapVoice('pad', 0), { notes: [57, 62, 67, 72], velocity: 0.4, cutoff: 200 }); // A3 D4 G4 C5
 assert.deepEqual(mapVoice('bass', 0), { notes: [33], velocity: 0.4, cutoff: 200 });  // A1
 assert.deepEqual(mapVoice('bass', 7 << 2).notes, [50]);                               // top: D3
 console.log('mapping ok');

@@ -30,6 +30,8 @@ export function mapVoice(name, raw) {
     case 'drums': return { drum: DRUMS[a], velocity };
     case 'bass':  return { notes: [note(a, -1)], velocity, cutoff }; // A1..D3, under the pad
     case 'lead':  return { notes: [note(a + b, 2)], velocity, cutoff };
-    case 'pad':   return { notes: [note(a, 1), note(a + 2, 1), note(a + 4, 1)], velocity, cutoff };
+    // Every other scale step: in minor pentatonic that stacks 4ths (A D G C), an open
+    // sus/7 sound that never clashes, whatever the root.
+    case 'pad':   return { notes: [note(a, 1), note(a + 2, 1), note(a + 4, 1), note(a + 6, 1)], velocity, cutoff };
   }
 }

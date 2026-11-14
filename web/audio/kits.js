@@ -230,20 +230,63 @@ const LEAD = {
 };
 
 // ---------------------------------------------------------------- pad
+// PolySynth of type 'synth' (any oscillator; `spread` = 3-voice fat), 'am' or 'fm'.
+// Chain: synth -> 180 Hz high-pass (keeps it off the bass) -> low-pass following
+// cutoff -> optional slow AutoFilter (`motion` Hz), Phaser, Chorus -> bus.
 function pad(ctx, o) {
-  const filter = ctx.add(new Tone.Filter(800, 'lowpass'));
-  sends(ctx, filter, o);
-  const syn = ctx.add(new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: o.osc ?? 'fatsawtooth' }, envelope: { attack: 1, release: 2 }, volume: o.level,
-  })).connect(filter);
+  const { add } = ctx;
+  const bus = gain(add, o.level);
+  sends(ctx, bus, o);
+  let head = bus;
+  if (o.chorus) head = add(new Tone.Chorus({ frequency: o.chorus.rate, delayTime: 3.5, depth: o.chorus.depth, wet: 0.5 }).start()).connect(head);
+  if (o.phaser) head = add(new Tone.Phaser({ frequency: 0.15, octaves: 3, baseFrequency: 400, wet: 0.35 })).connect(head);
+  if (o.motion) {
+    head = add(new Tone.AutoFilter({
+      frequency: o.motion, baseFrequency: 300, octaves: 3.5, wet: 0.7,
+      filter: { type: 'lowpass', rolloff: -12, Q: 1 },
+    }).start()).connect(head);
+  }
+  const lp = add(new Tone.Filter({ type: 'lowpass', frequency: 1200, rolloff: -12 })).connect(head);
+  const hp = add(new Tone.Filter({ type: 'highpass', frequency: 180 })).connect(lp);
+
+  const env = { attack: o.attack ?? 1.5, decay: 1, sustain: 0.8, release: o.release ?? 3 };
+  let syn;
+  if (o.type === 'am') {
+    syn = new Tone.PolySynth(Tone.AMSynth, { harmonicity: 2, modulation: { type: 'triangle' }, envelope: env });
+  } else if (o.type === 'fm') {
+    syn = new Tone.PolySynth(Tone.FMSynth, { harmonicity: 2, modulationIndex: 1.5, envelope: env });
+  } else {
+    const oscillator = o.spread ? { type: o.osc, count: 3, spread: o.spread } : { type: o.osc ?? 'triangle' };
+    syn = new Tone.PolySynth(Tone.Synth, { oscillator, envelope: env });
+  }
+  add(syn).connect(hp);
+  syn.maxPolyphony = 16;
   return {
     play(p, t) {
-      filter.frequency.rampTo(p.cutoff * 2, 1);
-      syn.triggerAttackRelease(p.notes.map(midi), '1n', t, p.velocity);
+      lp.frequency.rampTo(400 + p.cutoff * 1.2, 2, t); // 640..3340 Hz, glides between chords
+      syn.triggerAttackRelease(p.notes.map(midi), o.hold ?? 2.5, t, 0.3 + 0.5 * p.velocity);
     },
     silence() { syn.releaseAll(); },
   };
 }
+
+const PAD = {
+  saw: {
+    osc: 'fatsawtooth', spread: 25, attack: 1.2, release: 3, hold: 3,
+    chorus: { rate: 0.7, depth: 0.5 }, motion: 0.08,
+    verb: -2, level: -24,
+  },
+  warm: {
+    type: 'am', attack: 0.8, release: 2.5, hold: 2.5,
+    chorus: { rate: 1.2, depth: 0.7 },
+    verb: -6, level: -16,
+  },
+  air: {
+    osc: 'fattriangle', spread: 30, attack: 3, release: 5, hold: 3,
+    phaser: true, motion: 0.05,
+    verb: 0, level: -16,
+  },
+};
 
 // ---------------------------------------------------------------- kits
 function makeKit(spec) {
@@ -276,7 +319,7 @@ const BASIC = {
   drums: DRUMS.punchy,
   bass: BASS.saw,
   lead: LEAD.square,
-  pad: { level: -20, verb: -3 },
+  pad: PAD.saw,
 };
 
 export const KITS = {
@@ -286,6 +329,6 @@ export const KITS = {
     ...BASIC,
     bass: BASS.fm,
     lead: LEAD.pluck,
-    pad: { ...BASIC.pad, osc: 'fattriangle' },
+    pad: PAD.air,
   }),
 };
