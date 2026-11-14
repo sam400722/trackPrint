@@ -1,6 +1,6 @@
 // Sources -> per-channel signal -> 'frame' events. Owns connect/simulate and status.
 import { emit, on, VOICES } from './bus.js';
-import { connectSerial, simFill, startSim } from './serial.js';
+import { connectSerial, simChannels, simFill, simSensors, startSim } from './serial.js';
 import { createChannel } from './signal.js';
 
 let stop = null;
@@ -46,7 +46,9 @@ on('route', (ch) => {
 on('connect', go((onFrame, onClose) => {
   filling = fillMissing();
   announce();
-  return connectSerial(filling ? simFill(onFrame, () => route) : onFrame, onClose);
+  const forced = simSensors(); // broken sensors (serial.js BROKEN_SENSORS) or ?sim=
+  const out = forced.length ? simChannels(onFrame, forced) : onFrame;
+  return connectSerial(filling ? simFill(out, () => route) : out, onClose);
 }));
 on('simulate', go((onFrame, onClose) => {
   filling = false;

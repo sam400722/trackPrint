@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseLine, simFill } from './serial.js';
+import { parseLine, simChannels, simFill, simSensors } from './serial.js';
 
 assert.deepEqual(parseLine('1,2,3,4'), [1, 2, 3, 4]);
 assert.deepEqual(parseLine('100000,0,262143,5\r'), [100000, 0, 262143, 5]);
@@ -80,6 +80,39 @@ import { createChannel } from './signal.js';
     assert.ok(!s.finger && !s.beat && s.bpm === 0);
   }
 }
+{
+  // bad-read filter: a 72 BPM pulse with noise, run through filtered and unfiltered channels
+  let seed = 7;
+  const noise = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5) * 100;
+  const wave = Array.from({ length: 50 * 30 }, (_, i) => Math.round(100000 - 400 * Math.sin((2 * Math.PI * 1.2 * i) / 50) + noise()));
+  const run = (raws, filter) => { const ch = createChannel(50, { filter }); return raws.map((r) => ch(r)); };
+
+  // clean signal: the filter changes nothing at all
+  const on = run(wave, true), off = run(wave, false);
+  assert.ok(on.every((s, i) => !s.held && s.ac === off[i].ac && s.beat === off[i].beat && s.bpm === off[i].bpm), 'filter is a no-op on clean data');
+
+  const at = 50 * 20; // glitches land 20 s in, after the BPM has locked
+  const bpmAfter = (out) => out[at + 50].bpm;
+  // a 2-sample drop to "no finger" (a slip or a bus error reading 0): unfiltered loses the BPM
+  const drop = wave.map((r, i) => (i === at || i === at + 1 ? 0 : r));
+  assert.equal(bpmAfter(run(drop, false)), 0);
+  const d = run(drop, true);
+  assert.ok(d[at].held && d[at].finger && Math.abs(bpmAfter(d) - 72) < 3, `drop held, bpm ${bpmAfter(d)}`);
+  // a lone spike far off the wave, and a saturated reading: held, BPM unaffected
+  for (const bad of [wave[at] + 60000, 262143]) {
+    const g = run(wave.map((r, i) => (i === at ? bad : r)), true);
+    assert.ok(g[at].held && !g[at + 1].held && Math.abs(bpmAfter(g) - 72) < 3, `glitch ${bad} held`);
+  }
+  // a real lift (stays low) still reads as no finger, 100 ms late at most
+  const lift = run(wave.map((r, i) => (i >= at ? 1000 : r)), true);
+  assert.ok(lift[at + 5].finger === false && lift[at + 5].bpm === 0, 'real lift goes through');
+  // a pressure change within 12 swings (+8000 on a +-400 pulse) is not a glitch: never held
+  assert.ok(run(wave.map((r, i) => (i >= at ? r + 8000 : r)), true).every((s) => !s.held), 'moderate shift untouched');
+  // a big jump that stays (+20000) is held for HOLD samples, then accepted; beats come back
+  const shift = run(wave.map((r, i) => (i >= at ? r + 20000 : r)), true);
+  assert.ok(shift[at].held && shift[at + 4].held && !shift[at + 5].held && !shift[at + 6].held, 'big shift passes after HOLD');
+  assert.ok(shift.slice(at + 50 * 4).some((s) => s.beat) && Math.abs(shift.at(-1).bpm - 72) < 3, `beats after shift, bpm ${shift.at(-1).bpm}`);
+}
 console.log('signal ok');
 
 import { fields, note } from './audio/mapping.js';
@@ -135,7 +168,7 @@ import { start } from './core.js';
   assert.deepEqual(got.raws, [100000, 0, 0, 0]);
   assert.equal(got.ch.length, 4);
   assert.ok(got.ch[0].finger && !got.ch[1].finger);
-  assert.deepEqual(Object.keys(got.ch[0]).sort(), ['ac', 'amp', 'beat', 'bpm', 'finger', 'inst']);
+  assert.deepEqual(Object.keys(got.ch[0]).sort(), ['ac', 'amp', 'beat', 'bpm', 'finger', 'held', 'inst']);
   assert.deepEqual(status, ['idle', 'running']);
 }
 {
@@ -243,3 +276,22 @@ console.log('lane ok');
   assert.ok(Number.isFinite(f.F) && Number.isFinite(f.L), 'dt = 0 is safe');
 }
 console.log('dynamics ok');
+
+{
+  const out = [];
+  const f = simChannels((r) => out.push(r), [3]);
+  f([60000, 70000, 80000, 3700]);  // three real fingers on: sensor 4 is simulated
+  assert.deepEqual(out[0].slice(0, 3), [60000, 70000, 80000]);
+  assert.ok(out[0][3] > 90000, 'simulated finger on');
+  f([60000, 1000, 80000, 3700]);   // one real finger lifts: the simulated one lifts too
+  assert.equal(out[1][3], 0);
+  // the simulated channel beats at a steady BPM through the real signal chain
+  const { createChannel } = await import('./signal.js');
+  const chan = createChannel(50); let bpm = 0;
+  for (let i = 0; i < 50 * 20; i++) { f([60000, 70000, 80000, 0]); bpm = chan(out.at(-1)[3]).bpm; }
+  assert.ok(bpm > 50 && bpm < 66, `sim pad bpm ${bpm}`);
+}
+assert.deepEqual(simSensors(''), [3]);            // sensor 4 is broken for now: simulated by default
+assert.deepEqual(simSensors('?sim=none'), []);
+assert.deepEqual(simSensors('?sim=2,4,9'), [1, 3]);
+console.log('simChannels ok');

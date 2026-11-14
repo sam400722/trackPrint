@@ -6,9 +6,14 @@ export function parseLine(line) {
   return /^\d+,\d+,\d+,\d+$/.test(t) ? t.split(',').map(Number) : null;
 }
 
+// The Pi Zero's USB gadget serial (Linux g_serial defaults: NetChip VID, CDC ACM PID). The picker
+// lists only the Pi, not the dozens of empty ttyS ports. ?port=any lists every port (the old Arduino).
+export const PI_GADGET = { usbVendorId: 0x0525, usbProductId: 0xa4a7 };
+const anyPort = () => new URLSearchParams(globalThis.location?.search).get('port') === 'any';
+
 export async function connectSerial(onFrame, onClose) {
-  const port = await navigator.serial.requestPort();
-  await port.open({ baudRate: 115200 });
+  const port = await navigator.serial.requestPort(anyPort() ? {} : { filters: [PI_GADGET] });
+  await port.open({ baudRate: 115200 }); // ignored by the gadget; the Arduino sketches use it
   const decoder = new TextDecoderStream();
   const piped = port.readable.pipeTo(decoder.writable).catch(() => {});
   const reader = decoder.readable.getReader();
@@ -63,6 +68,27 @@ export function startSim(onFrame) {
   const next = simSource();
   const id = setInterval(() => onFrame(next()), 20);
   return () => clearInterval(id);
+}
+
+// ponytail: sensor 4 is broken for now, so it is simulated unless the page says otherwise.
+// Set this to [] when it is fixed. ?sim=3,4 picks other sensors; ?sim=none simulates nothing.
+export const BROKEN_SENSORS = [4];
+// Sensor numbers (as on screen) -> channel indexes to simulate.
+export function simSensors(search = globalThis.location?.search ?? '', count = 4) {
+  const q = new URLSearchParams(search).get('sim');
+  const nums = q == null ? BROKEN_SENSORS : q.split(',').map((n) => parseInt(n, 10));
+  return [...new Set(nums.map((n) => n - 1).filter((ch) => ch >= 0 && ch < count))];
+}
+
+// Replace the listed channels (a broken sensor) with simulated pulses. A simulated finger is
+// only on while every real channel has a finger, so the band still merges when the real players do.
+export function simChannels(onFrame, chans, rate = 50) {
+  const next = simSource(rate);
+  return (raws) => {
+    const sim = next();
+    const held = raws.every((r, ch) => chans.includes(ch) || r >= FINGER_MIN);
+    onFrame(raws.map((r, ch) => (chans.includes(ch) ? (held ? sim[ch] : 0) : r)));
+  };
 }
 
 // Wrap a frame callback so channels whose sensor is missing (the firmware reports
