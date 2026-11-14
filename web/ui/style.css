@@ -56,3 +56,22 @@ button:focus-visible, select:focus-visible, .seg input:focus-visible + span {
 #status { margin: 0; font-size: 2vh; color: var(--muted); }
 #status[data-state=running] { color: var(--text); }
 #status[data-state=disconnected], #status[data-state=error] { color: var(--pad); }
+
+/* B5: states */
+main { position: relative; }
+#hint { position: absolute; left: 0; right: 0; top: 50vh; display: grid; gap: 1vh; justify-items: center; pointer-events: none; }
+#hint p { margin: 0; font: italic 400 2.6vh var(--serif); color: var(--muted); text-align: center; }
+#banner { position: fixed; z-index: 1; top: 12vh; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2vh;
+  padding: 1vh 1vh 1vh 2.5vh; border-radius: 999px; color: var(--text);
+  background: color-mix(in srgb, var(--pad) 22%, var(--bg-a)); border: 1px solid color-mix(in srgb, var(--pad) 55%, transparent); }
+#banner[hidden], #hint p[hidden], #reconnect[hidden] { display: none; }
+.sr { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; padding: 0; }
+
+/* performance view */
+.perf body { grid-template-rows: 1fr; }
+.perf header, .perf #banner { display: none; }
+.still, .still * { cursor: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation-duration: .01ms !important; scroll-behavior: auto !important; } /* canvas motion: see rm in stage.js */
+}

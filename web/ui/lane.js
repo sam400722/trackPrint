@@ -74,8 +74,8 @@ export function drawLane(c, r, now, u, dpr, col) {
 
   c.shadowBlur = 0.8 * u * dpr;
   for (let k = n - 1; k >= 0; k--) {
-    const s = notes.at(k), x = X(s.t), hue = col[s.voice] ?? col.other, rad = (DOT[0] + DOT[1] * s.vel) * u;
-    c.globalAlpha = 1 - (now - s.t) / SPAN; c.shadowColor = hue;
+    const s = notes.at(k), x = X(s.t), hue = col.v[s.voice] ?? col.other, rad = (DOT[0] + DOT[1] * s.vel) * u;
+    c.globalAlpha = 1 - Math.max(0, now - s.t) / SPAN; c.shadowColor = hue;
     c.beginPath();
     if (s.voice === 'drums') {
       c.arc(x, floor, rad * (DRUM.get(s.drum) ?? 1), 0, 2 * Math.PI);

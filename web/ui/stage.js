@@ -13,6 +13,7 @@ const FLARE = 4;        // ponytail: extra glow in vh at the peak of a beat
 const RIPPLE_MS = 1200; // ponytail: drum ripple life
 const RIPPLE = 1.5;     // ponytail: ripple grows to R * (1 + RIPPLE * velocity)
 const WASH_MS = 7000;   // ponytail: pad wash fade
+const rm = matchMedia('(prefers-reduced-motion: reduce)'); // live: .matches is read each use
 
 const cv = document.getElementById('stage');
 const c = cv.getContext('2d');
@@ -32,7 +33,8 @@ const P = VOICES.map((v, i) => {
     buf: new Float32Array(N), head: 0, count: 0, max: 1, last: 0, level: 0, beatAt: -1e9 };
 });
 const COL = { other: tok('--other'), text: TEXT, muted: MUTED, serif: SERIF }; // lane colours
-VOICES.forEach((v, i) => { COL[v] = P[i].col; });
+COL.v = Object.assign(Object.create(null), ...VOICES.map((v, i) => ({ [v]: P[i].col }))); // null prototype: 'constructor' etc. fall back to --other
+COL.lead = COL.v.lead;
 
 // music: drum ripples (pool, reused) and the pad wash
 const DI = VOICES.indexOf('drums');
@@ -46,7 +48,7 @@ on('note', (n) => {
     // full-screen wash: body::before in style.css (behind header and canvas), faded by the compositor
     const root = Array.isArray(n.notes) ? n.notes[0] : NaN, k = Number.isFinite(root) ? (((root % 12) + 12) % 12) % 3 : 0;
     document.body.style.setProperty('--wash', `var(--wash-${k + 1})`); // hue from the root's pitch class: same chord, same hue
-    document.body.animate({ opacity: [1, 0] }, { duration: WASH_MS, pseudoElement: '::before' });
+    document.body.animate({ opacity: [1, 0] }, { duration: rm.matches ? WASH_MS * 2 : WASH_MS, pseudoElement: '::before' });
   }
 });
 
@@ -119,12 +121,13 @@ function drawPanels(now, dt, live) {
     if (touching) {
       const kick = Math.min(1, Math.max(0, 1 - (now - p.beatAt) / BEAT_MS)) ** 2;
       p.level += (Math.abs(p.last) / p.max - p.level) * ease;
-      const r = R * (0.85 + 0.15 * p.level + SWELL * kick);
+      const r = R * (0.85 + 0.15 * p.level + (rm.matches ? 0 : SWELL * kick));
       c.save();
+      if (rm.matches) c.globalAlpha = 0.75 + 0.25 * kick; // reduced motion: brief opacity lift instead of swell and flare
       c.translate(cx, cy); c.scale(r, r);
       blobPath(0, 0, 1, t, i);
       c.fillStyle = p.fill; c.shadowColor = p.col;
-      c.shadowBlur = (GLOW + FLARE * kick) * u * dpr; // shadowBlur ignores the transform
+      c.shadowBlur = (GLOW + (rm.matches ? 0 : FLARE * kick)) * u * dpr; // shadowBlur ignores the transform
       c.fill();
       c.restore();
     } else {
@@ -156,7 +159,7 @@ function drawRipples(now) {
   const cx = stage.x + (stage.w / VOICES.length) * (DI + 0.5);
   c.strokeStyle = P[DI].col; c.lineWidth = Math.max(1.5, 0.25 * u);
   for (let i = 0; i < RIP.length; i++) {
-    const r = RIP[i], a = (now - r.t) / RIPPLE_MS;
+    const r = RIP[i], a = Math.max(0, now - r.t) / RIPPLE_MS;
     if (a >= 1) continue;
     c.globalAlpha = (1 - a) * 0.7;
     c.beginPath(); c.arc(cx, cy, R * (1 + a * RIPPLE * r.vel), 0, 2 * Math.PI); c.stroke();
@@ -171,7 +174,7 @@ function loop(now) {
   if (W) {
     c.clearRect(0, 0, W, H);
     drawPanels(now, dt, frame && now - frameAt < STALE_MS);
-    if (DI >= 0) drawRipples(now);
+    if (DI >= 0 && !rm.matches) drawRipples(now);
     drawLane(c, lane, now, u, dpr, COL);
   }
   requestAnimationFrame(loop);

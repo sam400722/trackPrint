@@ -12,6 +12,7 @@
     <div class="controls">
       <button id="connect" type="button">Connect sensors</button>
       <button id="sim" type="button">Simulate</button>
+      <button id="fs" type="button" title="Fullscreen, controls hidden (F)">Performance view</button>
       <fieldset id="mode" class="seg">
         <legend>Mode</legend>
         <label><input type="radio" name="mode" value="beats" checked><span>beats</span></label>
@@ -21,7 +22,18 @@
       <p id="status" data-state="idle" role="status"></p>
     </div>
   </header>
-  <main><canvas id="stage"></canvas></main>
+  <div id="banner" hidden>
+    <span id="bmsg"></span>
+    <button id="reconnect" type="button">Reconnect</button>
+  </div>
+  <main>
+    <canvas id="stage" aria-hidden="true"></canvas>
+    <div id="hint">
+      <p id="idle" hidden>Connect the sensors, or press Simulate to hear a demo.</p>
+      <p id="unsup" hidden>Use Chrome or Edge to connect sensors. Simulate still works.</p>
+    </div>
+    <ul id="sr" class="sr" aria-label="Players"></ul>
+  </main>
   <script type="module" src="main.js"></script>
 </body>
 </html>
