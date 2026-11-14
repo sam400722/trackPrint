@@ -1,24 +1,26 @@
 # trackPrint: biometric-to-music device
 
 ## Context
-Four MAX30102 heart-rate sensors feed a microcontroller. The data goes to a laptop over USB serial. In the browser, Tone.js turns each sensor's signal into one voice of an electronic band: drums, bass, lead and pad. The sensors may be worn by four people or by one person (either must work). Whether beats trigger notes or raw bits alone drive the music is undecided, so the design keeps that choice swappable.
+Four MAX30102 heart-rate sensors feed a Raspberry Pi Zero 2 W. The data goes to a laptop over USB serial. In the browser, Tone.js turns each sensor's signal into one voice of an electronic band: drums, bass, lead and pad. The sensors may be worn by four people or by one person (either must work). Whether beats trigger notes or raw bits alone drive the music is undecided, so the design keeps that choice swappable.
 
 Decisions made in brainstorming:
-- Signal: undecided, so firmware streams RAW samples only. Beat detection and bit mapping live in the browser.
-- Link: USB serial (Uno or Leonardo; both work, default Uno).
+- Signal: undecided, so the Pi streams RAW samples only. Beat detection and bit mapping live in the browser.
+- Link: USB serial. The Pi runs as a USB gadget (`g_serial`), so the laptop sees an ordinary serial port.
 - Synth: Tone.js in the browser, reading serial directly with the Web Serial API (Chrome/Edge). No Node bridge.
 - Voices: ch0 drums, ch1 bass, ch2 lead, ch3 pad.
-- Not used: Pi Zero W2 (no Wi-Fi needed).
+- Not used: Wi-Fi (USB is simpler and keeps Web Serial).
+- Changed 2026-11-14: the original Arduino Uno + TCA9548A mux design was dropped because we have no mux. The old sketch stays in `firmware/trackprint/` for reference.
 
 ## Hardware
-- 4x MAX30102 -> TCA9548A I2C multiplexer (channels 0-3) -> Uno SDA/SCL. The MAX30102's I2C address is fixed (0x57), so the mux is mandatory.
-- Power the mux and sensors from the 3.3V pin and pull SDA/SCL up to 3.3V. I2C is open-drain, so this is safe with the Uno's 5V logic. Check each breakout's onboard pull-ups.
-- Uno resets when the serial port opens (1-2 s delay, acceptable). A Leonardo avoids this but needs a wait-for-DTR line in setup.
+- The MAX30102's I2C address is fixed (0x57), so each sensor gets its own bus instead of a mux: sensor 0 on hardware `i2c-1` (GPIO2/3), sensors 1-3 on bit-banged `i2c-gpio` buses `i2c-3`/`-4`/`-5` (GPIO17/27, 22/23, 24/25). Pin table in the README.
+- Sensors run from the Pi's 3.3V pin; the Pi's logic is 3.3V too, so there are no level issues. Breakout pull-ups do the real work. Weak internal pull-ups on the bit-banged pins (`gpio=17,22-25,27=pu`) keep an empty bus from hanging on clock-stretch timeouts.
+- One micro-USB cable (the Pi's USB port, not PWR IN) powers the Pi and carries the data. It takes about 30 s to boot.
 
-## Firmware: `firmware/trackprint/trackprint.ino`
-- Uses the SparkFun MAX3010x library. For each tick (50 Hz): select mux channel, read the newest IR sample, repeat for 4 channels.
-- Prints one CSV line per tick: `ir0,ir1,ir2,ir3\n` at 115200 baud (~2 KB/s, well under the serial limit).
-- No processing on the device. A missing sensor prints 0.
+## Sensor reader: `pi/trackprint.py`
+- Python with `smbus2`, talking to the MAX30102 registers directly (the SparkFun library is Arduino-only). Same settings as the old sketch: LED 0x1F, 4-sample average, red+IR, 200 sps -> 50 Hz.
+- One thread per sensor drains its FIFO and keeps the newest IR sample, so a dead bus can't stall output. A lost sensor reads 0 and is retried every 2 s.
+- The main loop writes one CSV line every 20 ms: `ir0,ir1,ir2,ir3\n` to `/dev/ttyGS0`, dropping lines while no host is reading.
+- No processing on the device. Runs at boot as `trackprint.service`; `pi/setup.sh` does the one-time Pi config.
 
 ## Browser app: `web/` (no build step, Tone.js from a CDN, served with `python3 -m http.server`)
 - `serial.js`: Web Serial connect + line parser -> emits `{ch: [4 raw ints]}` per tick. Also exposes a **simulator source** with the same interface (four fake pulses at different BPMs plus noise), so the app can be developed with no hardware.
@@ -28,7 +30,7 @@ Decisions made in brainstorming:
 - `index.html` and `main.js`: Connect and Simulate buttons, mode toggle, and four small live meters (signal, BPM, finger-on).
 
 ## Team split
-Two teammates build the browser app in parallel after a shared foundation (firmware, `serial.js`, `signal.js`, and a working stub of everything).
+Two teammates build the browser app in parallel after a shared foundation (sensor reader, `serial.js`, `signal.js`, and a working stub of everything).
 - `bus.js`: the contract. A native `EventTarget` with `emit`/`on` and a fixed event table (`frame`, `status`, `connect`, `simulate`, `mode`, `kit`, `kits`, `analyser`, `note`). Audio and UI never import each other.
 - `core.js` (shared): sources → `signal.js` → `frame` events; handles `connect`/`simulate`; emits `status`.
 - `audio/` (sound teammate): `mapping.js`, `kits.js` (the voices above, as switchable kits), `audio.js` (mode gate, master chain, analysers; emits `note`).
@@ -42,13 +44,13 @@ Two teammates build the browser app in parallel after a shared foundation (firmw
 
 ## Testing
 - `web/test.mjs` (plain Node `assert`, no framework): beat detector finds the expected BPM on a synthetic pulse, and the bit-chunker returns the expected fields for known inputs.
-- Hardware check: the Arduino serial monitor shows 4 changing IR values, and each drops to ~0 when its finger is removed.
+- Hardware check: `python3 /opt/trackprint/trackprint.py -` on the Pi (service stopped) shows 4 changing IR values, and each drops to ~0 when its finger is removed.
 - End-to-end: the simulator plays all four voices without hardware. Then use real sensors with the serial source.
 
 ## Verification
-1. Flash the firmware and watch the CSV in the serial monitor (4 live channels).
+1. Run `pi/setup.sh` on the Pi, reboot, and check `i2cdetect -y 1/3/4/5` each shows `57`; watch the CSV with the reader in `-` mode (4 live channels).
 2. `cd web && python3 -m http.server`, open in Chrome, press Simulate and confirm all four voices play.
-3. Press Connect, select the Arduino port, put fingers on and confirm the meters and beats respond.
+3. Press Connect, select the Pi's port (`usbmodem…` on a Mac), put fingers on and confirm the meters and beats respond.
 4. `node web/test.mjs` passes.
 
 ## Open items (deferred on purpose)

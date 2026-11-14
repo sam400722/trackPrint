@@ -4,6 +4,8 @@
 
 **Overview, contract, and branching rules:** [`2026-11-14-trackprint.md`](2026-11-14-trackprint.md). Read it first.
 
+> **Hardware changed (2026-11-14):** the Arduino + TCA9548A mux described here was replaced by a Raspberry Pi Zero 2 W reading each sensor on its own I2C bus (`pi/`). The CSV format is unchanged. See the README and the [design spec](../specs/2026-11-13-trackprint-design.md). This plan is kept as written.
+
 **Who:** one person, or both teammates pairing. **Branch:** `foundation` (off `main`), merged to `main` before anyone starts the sound or visuals tracks.
 
 **Goal:** a walking skeleton. Hardware streams CSV, the browser turns it into `frame` events on the bus, a stub audio module plays crude sound, and a stub UI shows buttons and meters. When this is merged, each teammate replaces their own stub while the other half keeps working.

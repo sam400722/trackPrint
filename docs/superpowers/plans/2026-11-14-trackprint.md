@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-13-trackprint-design.md`
 
+> **Hardware changed (2026-11-14):** the Arduino + TCA9548A mux described here was replaced by a Raspberry Pi Zero 2 W reading each sensor on its own I2C bus (`pi/`). The CSV format is unchanged. See the README and the [design spec](../specs/2026-11-13-trackprint-design.md). This plan is kept as written.
+
 ## Plans and owners
 
 | Part | Plan | Who | Branch |

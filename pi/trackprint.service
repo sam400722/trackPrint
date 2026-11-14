@@ -1,0 +1,12 @@
+[Unit]
+Description=trackPrint heart-rate sensor reader
+After=multi-user.target
+
+[Service]
+User=flatline
+ExecStart=/usr/bin/python3 /opt/trackprint/trackprint.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
