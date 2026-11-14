@@ -45,3 +45,18 @@ export function mapVoice(name, raw) {
     case 'pad':   return { notes: [note(a, 1), note(a + 2, 1), note(a + 4, 1)], velocity, cutoff };
   }
 }
+
+const clamp = (value, lo, hi) => Math.min(hi, Math.max(lo, value));
+
+// Phrase choices use the stable, higher bits of a sample plus settled heart
+// features. Unsettled channels intentionally contribute a neutral seed.
+export function phraseSeed(raw, heart) {
+  if (!heart?.on || !heart.settled) return 0;
+  const [a, b, c, d] = fields((raw >>> 0) >>> SKIP_BITS, WIDTHS);
+  const press = Math.round(clamp(Number(heart.press), 0, 1) * 31);
+  const breath = Math.round((clamp(Number(heart.breath), -1, 1) + 1) * 15.5);
+  let x = ((a << 27) ^ (b << 20) ^ (c << 13) ^ (d << 6) ^ (press << 1) ^ breath) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0;
+  return (x ^ (x >>> 16)) >>> 0;
+}
