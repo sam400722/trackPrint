@@ -22,6 +22,12 @@ function sends(ctx, node, o) {
 // ---------------------------------------------------------------- drums
 // Pieces: kick, snare, clap, hat, openhat, tom. Unknown names play the closed hat.
 // Velocity changes level everywhere, and decay on kick, snare and closed hat.
+//   kick:  sine body with a pitch sweep, optional noise `click` (dB) for attack, and
+//          optional `drive` (0..1) through a tanh saturator for weight.
+//   snare: optional pitched `body` (MembraneSynth) plus white or pink noise through a
+//          high-pass / low-pass pair. No body + slow attack = a brush.
+//   hats:  `kind` 'metal' (MetalSynth, clangy and bright) or 'noise' (filtered noise,
+//          softer). One synth serves closed and open hats, so a closed hat chokes an open one.
 function drums(ctx, o) {
   const { add } = ctx;
   const bus = gain(add, o.level);
@@ -31,36 +37,71 @@ function drums(ctx, o) {
     sends(ctx, crush, o);
   } else sends(ctx, bus, o);
 
+  // kick
+  const K = o.kick;
+  let kickOut = bus;
+  if (K.drive) {
+    const k = 1 + 4 * K.drive; // unity at full scale, more gain (fatter) on the decay
+    kickOut = add(new Tone.WaveShaper((x) => Math.tanh(k * x) / Math.tanh(k), 1024)).connect(bus);
+  }
   const kick = add(new Tone.MembraneSynth({
-    pitchDecay: o.kick.pitchDecay, octaves: o.kick.octaves,
-    envelope: { attack: 0.001, decay: o.kick.decay, sustain: 0, release: 0.05 },
-    volume: o.kick.volume ?? 0,
-  })).connect(bus);
+    pitchDecay: K.pitchDecay, octaves: K.octaves, oscillator: { type: 'sine' },
+    envelope: { attack: 0.001, decay: K.decay, sustain: 0, release: 0.05 },
+    volume: K.volume ?? 0,
+  })).connect(kickOut);
+  let click = null;
+  if (K.click != null) {
+    const clickFilter = add(new Tone.Filter({ type: 'bandpass', frequency: 3500, Q: 0.7 })).connect(kickOut);
+    click = add(new Tone.NoiseSynth({
+      envelope: { attack: 0.0005, decay: 0.006, sustain: 0, release: 0.005 }, volume: K.click,
+    })).connect(clickFilter);
+  }
 
-  const snareFilter = add(new Tone.Filter({ type: 'bandpass', frequency: o.snare.freq, Q: 0.9 })).connect(bus);
+  // snare
+  const S = o.snare;
+  const snareLp = add(new Tone.Filter({ type: 'lowpass', frequency: S.lp ?? 10000 })).connect(bus);
+  const snareHp = add(new Tone.Filter({ type: 'highpass', frequency: S.hp ?? 1500 })).connect(snareLp);
   const snare = add(new Tone.NoiseSynth({
-    envelope: { attack: 0.001, decay: o.snare.decay, sustain: 0, release: 0.02 },
-    volume: o.snare.volume ?? -4,
-  })).connect(snareFilter);
-  const snareBody = add(new Tone.MembraneSynth({
-    pitchDecay: 0.015, octaves: 1.5,
-    envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.02 },
-    volume: (o.snare.volume ?? -4) - 6,
+    noise: { type: S.noise ?? 'white' },
+    envelope: { attack: S.attack ?? 0.001, decay: S.decay, sustain: 0, release: 0.02 },
+    volume: S.volume ?? -4,
+  })).connect(snareHp);
+  const snareBody = S.body == null ? null : add(new Tone.MembraneSynth({
+    pitchDecay: 0.03, octaves: 1.5, oscillator: { type: S.bodyType ?? 'triangle' },
+    envelope: { attack: 0.001, decay: S.bodyDecay ?? 0.1, sustain: 0, release: 0.02 },
+    volume: (S.volume ?? -4) - 4,
   })).connect(bus);
 
-  const clapFilter = add(new Tone.Filter({ type: 'bandpass', frequency: 1100, Q: 0.8 })).connect(bus);
+  // clap
+  const clapFilter = add(new Tone.Filter({ type: 'bandpass', frequency: o.clap?.freq ?? 1100, Q: 0.8 })).connect(bus);
   const clap = add(new Tone.NoiseSynth({
     envelope: { attack: 0.001, decay: 0.01, sustain: 0, release: 0.01 },
     volume: o.clap?.volume ?? -4,
   })).connect(clapFilter);
 
-  const hatFilter = add(new Tone.Filter({ type: 'highpass', frequency: 7000 })).connect(bus);
-  const hat = add(new Tone.MetalSynth({
-    harmonicity: 5.1, modulationIndex: 32, resonance: o.hat.resonance ?? 4000, octaves: 1.5,
-    envelope: { attack: 0.001, decay: o.hat.closed, release: 0.05 },
-    volume: o.hat.volume ?? -16,
-  })).connect(hatFilter);
+  // hats
+  const H = o.hat;
+  const hatLp = add(new Tone.Filter({ type: 'lowpass', frequency: H.lp ?? 16000 })).connect(bus);
+  const hatHp = add(new Tone.Filter({ type: 'highpass', frequency: H.hp ?? 7000 })).connect(hatLp);
+  let hatHit;
+  if (H.kind === 'noise') {
+    const hat = add(new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: { attack: 0.001, decay: H.closed, sustain: 0, release: 0.02 },
+      volume: H.volume ?? -18,
+    })).connect(hatHp);
+    hatHit = (decay, t, v) => { hat.envelope.decay = decay; hat.triggerAttackRelease(0.01, t, v); };
+  } else {
+    const hat = add(new Tone.MetalSynth({
+      harmonicity: H.harmonicity ?? 5.1, modulationIndex: H.modulationIndex ?? 32,
+      resonance: H.resonance ?? 4000, octaves: 1.5,
+      envelope: { attack: 0.001, decay: H.closed, release: 0.05 },
+      volume: H.volume ?? -16,
+    })).connect(hatHp);
+    hatHit = (decay, t, v) => { hat.envelope.decay = decay; hat.triggerAttackRelease(300, 0.02, t, v); };
+  }
 
+  // tom
   const tom = add(new Tone.MembraneSynth({
     pitchDecay: 0.06, octaves: 2,
     envelope: { attack: 0.001, decay: 0.3, sustain: 0, release: 0.05 },
@@ -72,13 +113,14 @@ function drums(ctx, o) {
     const v = p.velocity;
     switch (p.drum) {
       case 'kick':
-        kick.envelope.decay = o.kick.decay * (0.5 + 0.7 * v); // harder hit, longer boom
-        kick.triggerAttackRelease(o.kick.note, 0.1, t, v);
+        kick.envelope.decay = K.decay * (0.5 + 0.7 * v); // harder hit, longer boom
+        kick.triggerAttackRelease(K.note, 0.1, t, v);
+        click?.triggerAttackRelease(0.004, t, v);
         break;
       case 'snare':
-        snare.envelope.decay = o.snare.decay * (0.7 + 0.5 * v);
+        snare.envelope.decay = S.decay * (0.7 + 0.5 * v);
         snare.triggerAttackRelease(0.05, t, v);
-        snareBody.triggerAttackRelease(o.snare.body, 0.05, t, v);
+        snareBody?.triggerAttackRelease(S.body, 0.05, t, v);
         break;
       case 'clap': // three quick bursts then a short tail
         clap.envelope.decay = 0.01;
@@ -89,37 +131,43 @@ function drums(ctx, o) {
       case 'tom':
         tom.triggerAttackRelease(o.tom?.note ?? 'E2', 0.1, t, v);
         break;
-      case 'openhat': // same synth as the closed hat, so a closed hat chokes it
-        hat.envelope.decay = o.hat.open;
-        hat.triggerAttackRelease(300, 0.05, t, v * 0.8);
+      case 'openhat':
+        hatHit(H.open, t, v * 0.8);
         break;
       default:
-        hat.envelope.decay = o.hat.closed * (0.7 + 0.6 * v);
-        hat.triggerAttackRelease(300, 0.02, t, v * 0.7);
+        hatHit(H.closed * (0.7 + 0.6 * v), t, v * 0.7);
     }
   };
 }
 
 const DRUMS = {
+  // Tuned 808: long boomy kick with a click and a little drive, tonal snare,
+  // crisp metallic hats.
   punchy: {
     level: -6, verb: -18,
-    kick: { note: 'A1', pitchDecay: 0.05, octaves: 6, decay: 0.45 },
-    snare: { freq: 1800, decay: 0.16, body: 'D3' },
-    hat: { closed: 0.045, open: 0.3 },
+    kick: { note: 'A1', pitchDecay: 0.08, octaves: 5, decay: 0.9, click: -14, drive: 0.25, volume: -2 },
+    snare: { body: 'E3', bodyType: 'triangle', bodyDecay: 0.12, noise: 'white', hp: 1800, lp: 9000, decay: 0.18 },
+    hat: { kind: 'metal', closed: 0.035, open: 0.32, modulationIndex: 40, resonance: 6000, hp: 7500 },
+    clap: { freq: 1200 },
   },
+  // Boom-bap: short, thuddy, heavily driven kick, dark pink-noise snare,
+  // soft noise hats, all through the 6-bit crush.
   dusty: {
     level: -6, crush: 6, crushWet: 0.35, verb: -14,
-    kick: { note: 'A1', pitchDecay: 0.03, octaves: 4, decay: 0.5 },
-    snare: { freq: 1400, decay: 0.2, body: 'C3' },
-    hat: { closed: 0.03, open: 0.25, volume: -20 },
+    kick: { note: 'A1', pitchDecay: 0.025, octaves: 3.5, decay: 0.35, click: -18, drive: 0.6, volume: -3 },
+    snare: { body: 'C3', bodyType: 'sine', bodyDecay: 0.15, noise: 'pink', hp: 900, lp: 5000, decay: 0.24 },
+    hat: { kind: 'noise', closed: 0.04, open: 0.28, hp: 6000, lp: 11000, volume: -14 },
+    clap: { freq: 900 },
     tom: { note: 'D2', volume: -8 },
   },
+  // Brushes: soft sub kick with no click, a swishy brush snare (slow attack,
+  // no body), airy noise hats.
   soft: {
     level: -3, verb: -6,
-    kick: { note: 'A1', pitchDecay: 0.02, octaves: 3, decay: 0.6, volume: -4 },
-    snare: { freq: 2500, decay: 0.35, body: 'A3', volume: -14 }, // brush swish
-    clap: { volume: -14 },
-    hat: { closed: 0.08, open: 0.6, volume: -24 },
+    kick: { note: 'A1', pitchDecay: 0.015, octaves: 2, decay: 0.8, volume: -4 },
+    snare: { noise: 'pink', attack: 0.02, hp: 1500, lp: 7000, decay: 0.4, volume: -6 },
+    hat: { kind: 'noise', closed: 0.09, open: 0.6, hp: 8000, lp: 14000, volume: -16 },
+    clap: { volume: -14, freq: 1500 },
     tom: { note: 'E2', volume: -8 },
   },
 };
