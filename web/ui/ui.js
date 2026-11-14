@@ -19,6 +19,7 @@ function press(type) {
 $('connect').onclick = () => press('connect');
 $('reconnect').onclick = () => press('connect');
 $('sim').onclick = () => press('simulate');
+if (new URLSearchParams(location.search).has('demo')) press('simulate'); // dev: ?demo starts the simulation for screenshots
 $('kit').onchange = (e) => emit('kit', e.target.value);
 
 // Debugging with ?fill=sim: click a voice's column to put the real sensor on it.
