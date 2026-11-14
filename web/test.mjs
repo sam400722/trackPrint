@@ -16,6 +16,19 @@ assert.equal(parseLine(''), null);
   assert.ok(out.every((r) => r[1] > 99000 && r[1] < 101000 && r[2] > 99000));
   assert.ok(new Set(out.map((r) => r[1])).size > 10); // it actually pulses
 }
+{
+  // simFill with a route: the connected sensor's value moves there, the rest are simulated
+  const out = [];
+  let to = 2;
+  const fill = simFill((r) => out.push(r), () => to);
+  for (let i = 0; i < 50; i++) fill([123456, 0, 0, 0]);
+  assert.ok(out.every((r) => r[2] === 123456 && r[1] > 99000 && r[3] > 99000 && r[0] !== 123456));
+  to = 3;
+  fill([1000, 0, 0, 0]);                 // finger off still routes (reads low, not 0)
+  assert.equal(out.at(-1)[3], 1000);
+  fill([0, 0, 0, 0]);                    // no sensor at all: the routed voice reads 0
+  assert.equal(out.at(-1)[3], 0);
+}
 console.log('serial ok');
 
 import { createChannel } from './signal.js';

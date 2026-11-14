@@ -21,6 +21,13 @@ $('reconnect').onclick = () => press('connect');
 $('sim').onclick = () => press('simulate');
 $('kit').onchange = (e) => emit('kit', e.target.value);
 
+// Debugging with ?fill=sim: click a voice's column to put the real sensor on it.
+$('stage').addEventListener('click', (e) => {
+  const b = e.currentTarget.getBoundingClientRect();
+  emit('route', Math.min(VOICES.length - 1, Math.floor(((e.clientX - b.left) / b.width) * VOICES.length)));
+});
+on('sensor', (s) => ($('stage').style.cursor = s == null ? '' : 'pointer'));
+
 const LINES = {
   idle: 'Ready', // the stage carries the full instruction
   running: 'Playing',

@@ -31,9 +31,27 @@ export function start(source) {
 }
 
 const go = (source) => () => start(source).catch((e) => emit('status', `error: ${e.message}`));
-// Open the page with ?fill=sim to simulate every channel whose sensor isn't plugged in.
+// Open the page with ?fill=sim to debug with fewer sensors than voices: the real
+// sensor plays the voice chosen by 'route' (default drums) and the rest are simulated.
 // Read at click time, not import time, so Node can still load this module.
 const fillMissing = () => new URLSearchParams(globalThis.location?.search).get('fill') === 'sim';
-on('connect', go((onFrame, onClose) => connectSerial(fillMissing() ? simFill(onFrame) : onFrame, onClose)));
-on('simulate', go(startSim));
+let route = 0;
+let filling = false;
+const announce = () => emit('sensor', filling ? route : null);
+on('route', (ch) => {
+  if (!Number.isInteger(ch) || ch < 0 || ch >= VOICES.length) return;
+  route = ch;
+  announce();
+});
+on('connect', go((onFrame, onClose) => {
+  filling = fillMissing();
+  announce();
+  return connectSerial(filling ? simFill(onFrame, () => route) : onFrame, onClose);
+}));
+on('simulate', go((onFrame, onClose) => {
+  filling = false;
+  announce();
+  return startSim(onFrame, onClose);
+}));
+emit('sensor', null);
 emit('status', 'idle');

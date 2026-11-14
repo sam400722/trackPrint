@@ -68,6 +68,8 @@ Order: Part 0 merges to `main` first. Then A and B run in parallel. Then Part I.
 | `connect` | ui | none | Emit synchronously inside the click handler. Web Serial and `Tone.start()` both need the user gesture. |
 | `simulate` | ui | none | Same rule. |
 | `kit` | ui | a name from `kits` | |
+| `route` | ui | `0..3` | Debugging with `?fill=sim`: the voice the real sensor plays. Sent when a circle is clicked. |
+| `sensor` (sticky) | core | `0..3 \| null` | The voice the real sensor plays in `?fill=sim` mode, `null` otherwise. |
 | `kits` (sticky) | audio | `string[]` | |
 | `analyser` (sticky) | audio | `{ wave, fft }` | Each has `.getValue(): Float32Array`. `wave` is 256 samples in −1…1, `fft` is 64 bins in dB. UI calls only `getValue()`. |
 | `note` | audio | `{ voice, ...params }` | Fired through `Tone.getDraw()` at the moment the note is heard. Drums: `{ voice: 'drums', drum, velocity }`. Others: `{ voice, notes: midi[], velocity, cutoff }`. |

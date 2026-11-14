@@ -47,7 +47,7 @@ arduino-cli upload  -b arduino:avr:uno -p /dev/ttyACM0 firmware/trackprint_singl
 
 At boot it prints one `# MAX30102 found on A4/A5` (or `not found`) line, which the web app ignores. Then come 50 lines per second. With no finger the reading is around 1,000; with a finger it's above 50,000.
 
-To play: open http://localhost:8000/?fill=sim, click **Connect sensors**, pick the Arduino. Your finger plays drums and the other three voices are simulated.
+To play: open http://localhost:8000/?fill=sim, click **Connect sensors**, pick the Arduino. Your finger plays drums and the other three voices are simulated. Click any circle to move the sensor to that voice; its label shows `· sensor`. This works with whichever channel the sensor is on, so you don't need to change `CHANNEL` and re-upload.
 
 ## Troubleshooting (Linux)
 These came up on an Arch Linux laptop with an Uno R3.

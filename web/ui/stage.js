@@ -74,6 +74,9 @@ COL.lead = COL.v.lead;
 const DI = VOICES.indexOf('drums');
 const RIP = Array.from({ length: 8 }, () => ({ t: -1e9, vel: 0 })); // ponytail: 8 live ripples is plenty at 16th-note drums
 let ripHead = 0;
+let sensorCh = null; // ?fill=sim debugging: the voice the real sensor plays
+on('sensor', (s) => (sensorCh = s));
+
 on('note', (n) => {
   if (n.voice === 'drums') {
     const r = RIP[ripHead = (ripHead + 1) % RIP.length];
@@ -222,7 +225,7 @@ function drawPanels(now, dt, live) {
     c.font = bpmFont; c.fillStyle = touching ? TEXT : DIM;
     c.fillText(touching && ch.bpm > 0 ? String(Math.round(ch.bpm)) : '--', cx, bpmY);
     c.font = labelFont; c.fillStyle = touching ? p.col : MUTED;
-    c.fillText(touching ? p.on : p.off, cx, labelY);
+    c.fillText((touching ? p.on : p.off) + (live && i === sensorCh ? ' · sensor' : ''), cx, labelY);
 
     if (touching && p.count > 1) { // newest sample at the right edge, scaled by this channel's own max
       const x1 = cx + traceW / 2, mid = traceY + traceH / 2;

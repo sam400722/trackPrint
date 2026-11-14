@@ -65,10 +65,15 @@ export function startSim(onFrame) {
 
 // Wrap a frame callback so channels whose sensor is missing (the firmware reports
 // those as 0) get simulated pulses. Real channels pass through untouched.
-export function simFill(onFrame) {
+// With route() returning a channel, the first connected sensor's reading moves to
+// that channel and every other channel is simulated (debugging with one sensor).
+export function simFill(onFrame, route = () => null) {
   const next = simSource();
   return (raws) => {
     const sim = next();
-    onFrame(raws.map((r, ch) => (r === 0 ? sim[ch] : r)));
+    const to = route();
+    if (to == null) return onFrame(raws.map((r, ch) => (r === 0 ? sim[ch] : r)));
+    const src = raws.findIndex((r) => r !== 0);
+    onFrame(sim.map((s, ch) => (ch === to ? (src < 0 ? 0 : raws[src]) : s)));
   };
 }
