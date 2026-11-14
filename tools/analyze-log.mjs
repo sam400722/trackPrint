@@ -57,7 +57,8 @@ function badReads(raws, out) {
 for (const path of process.argv.slice(2)) {
   const { meta, rows, col } = load(path);
   const secs = rows.length / RATE;
-  const sim = (meta.match(/[?&]sim=([\d,]+)/)?.[1] ?? '').split(',').map((n) => +n - 1);
+  // logs name their simulated sensors; older logs only carry ?sim= in the page options
+  const sim = (meta.match(/# simulated sensors: ([\d,]+)/)?.[1] ?? meta.match(/[?&]sim=([\d,]+)/)?.[1] ?? '').split(',').map((n) => +n - 1);
   const t = rows.map((r) => r[col('t_ms')]), gaps = t.slice(1).map((x, k) => x - t[k]);
   console.log(`\n== ${basename(path)}: ${rows.length} frames, ${f1(secs)} s, ${f1(rows.length / ((t.at(-1) - t[0]) / 1000))} frames/s`);
   console.log(`   ${meta.split('\n').filter((l) => /source|started/.test(l)).map((l) => l.slice(2)).join(' | ')}`);
@@ -66,7 +67,7 @@ for (const path of process.argv.slice(2)) {
     const raws = rows.map((r) => r[col(`raw${i + 1}`)]);
     const tag = `${i + 1} ${v}`.padEnd(8);
     if (raws.every((r) => r === 0)) return console.log(`   ${tag} no sensor (all 0)`);
-    if (sim.includes(i)) return console.log(`   ${tag} simulated (?sim), skipped`);
+    if (sim.includes(i)) return console.log(`   ${tag} simulated, skipped`);
     const fOn = replay(raws, true), fOff = replay(raws, false);
     const a = score(raws, fOff), b = score(raws, fOn), bad = badReads(raws, fOn);
     if (!a.fingerS && !b.fingerS) return console.log(`   ${tag} never a finger (raw median ${med(raws)})`);

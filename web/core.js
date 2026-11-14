@@ -1,6 +1,6 @@
 // Sources -> per-channel signal -> 'frame' events. Owns connect/simulate and status.
 import { emit, on, VOICES } from './bus.js';
-import { connectSerial, simChannels, simFill, startSim } from './serial.js';
+import { connectSerial, simChannels, simFill, simSensors, startSim } from './serial.js';
 import { createChannel } from './signal.js';
 
 let stop = null;
@@ -35,9 +35,6 @@ const go = (source) => () => start(source).catch((e) => emit('status', `error: $
 // sensor plays the voice chosen by 'route' (default drums) and the rest are simulated.
 // Read at click time, not import time, so Node can still load this module.
 const fillMissing = () => new URLSearchParams(globalThis.location?.search).get('fill') === 'sim';
-// ?sim=4 (sensor numbers as on screen, comma-separated) simulates those sensors, e.g. a broken one.
-const forcedSim = () => (new URLSearchParams(globalThis.location?.search).get('sim') ?? '')
-  .split(',').map((n) => parseInt(n, 10) - 1).filter((ch) => ch >= 0 && ch < VOICES.length);
 let route = 0;
 let filling = false;
 const announce = () => emit('sensor', filling ? route : null);
@@ -49,7 +46,7 @@ on('route', (ch) => {
 on('connect', go((onFrame, onClose) => {
   filling = fillMissing();
   announce();
-  const forced = forcedSim();
+  const forced = simSensors(); // broken sensors (serial.js BROKEN_SENSORS) or ?sim=
   const out = forced.length ? simChannels(onFrame, forced) : onFrame;
   return connectSerial(filling ? simFill(out, () => route) : out, onClose);
 }));

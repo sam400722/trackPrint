@@ -70,6 +70,16 @@ export function startSim(onFrame) {
   return () => clearInterval(id);
 }
 
+// ponytail: sensor 4 is broken for now, so it is simulated unless the page says otherwise.
+// Set this to [] when it is fixed. ?sim=3,4 picks other sensors; ?sim=none simulates nothing.
+export const BROKEN_SENSORS = [4];
+// Sensor numbers (as on screen) -> channel indexes to simulate.
+export function simSensors(search = globalThis.location?.search ?? '', count = 4) {
+  const q = new URLSearchParams(search).get('sim');
+  const nums = q == null ? BROKEN_SENSORS : q.split(',').map((n) => parseInt(n, 10));
+  return [...new Set(nums.map((n) => n - 1).filter((ch) => ch >= 0 && ch < count))];
+}
+
 // Replace the listed channels (a broken sensor) with simulated pulses. A simulated finger is
 // only on while every real channel has a finger, so the band still merges when the real players do.
 export function simChannels(onFrame, chans, rate = 50) {
