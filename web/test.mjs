@@ -81,4 +81,29 @@ import { start } from './core.js';
   assert.deepEqual(log.filter((x) => x !== 'running'), []);
   assert.equal(log.filter((x) => x === 'running').length, 1);
 }
+{
+  // two starts arrive while a slow previous stop is pending: it is called once;
+  // a superseded run whose source rejects emits no error status
+  const log = [];
+  on('status', (s) => log.push(s));
+  let stops = 0, release;
+  await start(async () => () => { stops++; return new Promise((r) => (release = r)); });
+  let rejectB;
+  const pb = start(() => new Promise((_, rej) => (rejectB = rej)));
+  const pc = start(async () => async () => {});
+  await Promise.resolve();
+  release();
+  await pc;
+  await pb; // B superseded before reaching source(): returns quietly
+  assert.equal(stops, 1);
+  // D's source is in flight, E supersedes it, then D's source rejects
+  log.length = 0;
+  let rejectD;
+  const pd = start(() => new Promise((_, rej) => (rejectD = rej)));
+  await Promise.resolve();
+  await start(async () => async () => {});
+  rejectD(new Error('late'));
+  await pd;
+  assert.deepEqual(log, ['running']);
+}
 console.log('contract ok');

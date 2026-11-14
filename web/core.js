@@ -13,8 +13,9 @@ function onFrame(raws) {
 
 export async function start(source) {
   const me = (run = {});
-  await stop?.();
-  stop = null;
+  const prev = stop;
+  stop = null; // take ownership before awaiting: concurrent starts must not re-stop it
+  await prev?.();
   if (run !== me) return;
   channels = VOICES.map(() => createChannel(50));
   try {
