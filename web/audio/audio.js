@@ -31,7 +31,6 @@ let step = 0;
 let running = false;
 let last = [0, 0, 0, 0];
 let lastT = {};
-const stepSeconds = Tone.Time('16n').toSeconds();
 const transport = Tone.getTransport();
 transport.bpm.value = GENRES[defaultName].tempo.default;
 
@@ -107,6 +106,7 @@ const repeat = (time) => {
     transport.bpm.rampTo(target, (8 * 60) / transport.bpm.value, time);
   }
   kit.update(Object.fromEntries(VOICES.map((voice, index) => [voice, hearts[index]])), time, s);
+  const stepSeconds = Tone.Time('16n').toSeconds();
   const events = evolution.next({ raws: last, hearts, stepSeconds });
   events.forEach((event) => {
     play(event.voice, event.params, hearts[VOICES.indexOf(event.voice)], time + event.offset,

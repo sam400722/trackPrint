@@ -8,6 +8,18 @@
 
 **Goal:** turn incoming sensor frames into music that sounds deliberate and good. This is the functional half: Tone.js setup, the trigger logic, and above all **instrument choice and sound design** for the four voices.
 
+**Follow-up direction (2026-11-14):** replace the three instrument-only kits with
+French house (Daft Punk inspired), UK garage, ambient, and Russian hardbass.
+The owner selected smooth sensor-driven sound changes together with evolving
+musical phrases; kit selection is the only creative control. The experience
+should feel like the body signals are composing an evolving piece, without
+requiring deliberate gestures. The proposed
+[genre and evolution design](../specs/2026-11-14-genre-evolution-design.md)
+records the scope and behavior. The self-contained
+[implementation plan](2026-11-14-genre-evolution.md) directs another LLM to use
+subagent-driven development on a new branch. The original tasks below describe
+the earlier sound work.
+
 **Files you own:** `web/audio/**` (`audio.js`, `kits.js`, `mapping.js`, `samples/`). You may append your own section to `web/test.mjs`. Anything else in `web/` is either shared (contract branch only) or the visuals teammate's.
 
 **Contract you work against** (full table in the overview):

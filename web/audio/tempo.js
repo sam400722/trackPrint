@@ -19,7 +19,7 @@ const GENRE_TEMPOS = {
 //   genre default while the drum finger is off or unsettled
 //   lock    first settled reading jumps the target to songBpm(hr)
 //   follow  then moves only for changes of 2 BPM or more
-//   release finger lifts: back to 90
+//   release finger lifts: back to the genre default
 // The caller glides the transport to each new target over 2 bars.
 export function createTempo(genreName) {
   const genre = GENRE_TEMPOS[genreName];

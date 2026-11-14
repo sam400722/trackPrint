@@ -383,3 +383,168 @@ test('audio lifecycle schedules the selected genre through one persistent repeat
   assert.ok(drawn.every(({ time }) => Number.isFinite(time)));
   assert.ok(emitted.some(([type]) => type === 'kits'));
 });
+
+function createAudioHarness({ readyFor = () => Promise.resolve(), evolutionFactory = createEvolution } = {}) {
+  const source = readFileSync(new URL('./audio/audio.js', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '');
+  const handlers = {};
+  const emitted = [];
+  const repeats = [];
+  const ramps = [];
+  const created = [];
+  const drawn = [];
+  const transport = {
+    bpm: {
+      value: 120,
+      rampTo(value, duration, time) {
+        ramps.push({ value, duration, time });
+        this.value = value;
+      },
+      cancelScheduledValues() {},
+    },
+    scheduleRepeat(fn) {
+      repeats.push(fn);
+      return repeats.length;
+    },
+    start() { this.started = true; },
+    stop() { this.stopped = true; },
+    position: 0,
+  };
+  class Node {
+    chain() { return this; } fan() { return this; } connect() { return this; }
+    dispose() { this.disposals = (this.disposals ?? 0) + 1; }
+    silence() { this.silences = (this.silences ?? 0) + 1; }
+  }
+  const Tone = {
+    Gain: Node, Compressor: Node, Limiter: Node, Waveform: Node, FFT: Node,
+    getDestination: () => new Node(), getTransport: () => transport,
+    getDraw: () => ({ schedule(fn, time) { drawn.push({ fn, time }); } }),
+    Time: () => ({ toSeconds: () => 60 / transport.bpm.value / 4 }),
+    start: async () => {},
+  };
+  const KITS = Object.fromEntries(Object.keys(GENRES).map((name) => [name, () => {
+    const instance = {
+      name, tail: 0, ready: readyFor(name), events: [], lifts: [],
+      drums(p, h, time) { this.events.push({ voice: 'drums', p, time }); },
+      bass(p, h, time) { this.events.push({ voice: 'bass', p, time }); },
+      lead(p, h, time) { this.events.push({ voice: 'lead', p, time }); },
+      pad(p, h, time) { this.events.push({ voice: 'pad', p, time }); },
+      update() {},
+      lift(voice) { this.lifts.push(voice); },
+      silence() { this.silences = (this.silences ?? 0) + 1; },
+      dispose() { this.disposals = (this.disposals ?? 0) + 1; },
+    };
+    created.push(instance);
+    return instance;
+  }]));
+  const active = { on: true, settled: true, hr: 75, press: 0.5, breath: 0 };
+  const env = {
+    Tone, KITS, VOICES, HEART_OFF,
+    createHeart: () => (channel) => channel?.finger ? active : HEART_OFF,
+    createTempo, createEvolution: evolutionFactory, GENRES,
+    emit: (type, detail) => emitted.push([type, detail]),
+    on: (type, fn) => { handlers[type] = fn; },
+    setTimeout,
+  };
+  runInNewContext(source, env);
+  return { handlers, emitted, repeats, ramps, created, drawn, transport };
+}
+
+const fingerFrame = {
+  raws: [1, 2, 3, 4],
+  ch: [{ finger: true }, { finger: true }, { finger: true }, { finger: true }],
+};
+
+test('audio repeat uses live tempo for duration and garage swing timing', () => {
+  const audio = createAudioHarness();
+  audio.handlers.status('running');
+  audio.handlers.frame(fingerFrame);
+  audio.repeats[0](0);
+  const first = audio.created[0].events.find(({ voice }) => voice === 'bass');
+  assert.equal(first.p.duration, 60 / songBpm(75, 'French house') / 4 * 2);
+
+  audio.handlers.kit('UK garage');
+  for (let i = 0; i < 16; i++) audio.repeats[0](0.125 + i * 0.125);
+  audio.repeats[0](2.125);
+  audio.repeats[0](2.25);
+  audio.repeats[0](2.375);
+  const garage = audio.created[1].events.find(({ voice, time }) => voice === 'bass' && time > 2.3);
+  const stepSeconds = 60 / audio.transport.bpm.value / 4;
+  assert.ok(Math.abs(garage.p.duration - stepSeconds) < 1e-12);
+  assert.ok(Math.abs(garage.time - (2.375 + 0.3 * stepSeconds)) < 1e-12);
+});
+
+test('rejected kit readiness silences only the active replacement', async () => {
+  let rejectReady;
+  const audio = createAudioHarness({
+    readyFor: (name) => name === 'UK garage'
+      ? new Promise((resolve, reject) => { rejectReady = reject; })
+      : Promise.resolve(),
+  });
+  audio.handlers.kit('UK garage');
+  rejectReady(new Error('kit failed'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(audio.created[1].silences, 1);
+  assert.ok(audio.emitted.some(([type, detail]) => type === 'status' && detail === 'error: kit failed'));
+  assert.equal(audio.created[0].silences, 1);
+});
+
+test('stale readiness rejection after superseded selection cannot silence the winner', async () => {
+  let rejectGarage;
+  const audio = createAudioHarness({
+    readyFor: (name) => name === 'UK garage'
+      ? new Promise((resolve, reject) => { rejectGarage = reject; })
+      : Promise.resolve(),
+  });
+  audio.handlers.kit('UK garage');
+  audio.handlers.kit('Russian hardbass');
+  rejectGarage(new Error('stale kit failed'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(audio.created[2].name, 'Russian hardbass');
+  assert.equal(audio.created[2].silences ?? 0, 0);
+  assert.equal(audio.emitted.some(([type, detail]) => type === 'status' && detail === 'error: stale kit failed'), false);
+});
+
+test('disconnect before pending activation reconnects with one callback and fresh evolution', () => {
+  const evolutions = [];
+  const audio = createAudioHarness({
+    evolutionFactory: (name) => {
+      const evolution = createEvolution(name);
+      evolutions.push(evolution);
+      return evolution;
+    },
+  });
+  audio.handlers.status('running');
+  audio.handlers.kit('UK garage');
+  audio.handlers.status('error: disconnected');
+  audio.handlers.status('running');
+  assert.equal(audio.repeats.length, 1);
+  assert.ok(evolutions.length >= 3);
+  audio.handlers.frame(fingerFrame);
+  audio.repeats[0](0);
+  assert.equal(audio.created.at(-1).name, 'UK garage');
+});
+
+test('draw callbacks retain kit ownership and exact scheduled timing', () => {
+  const audio = createAudioHarness();
+  audio.handlers.status('running');
+  audio.handlers.frame(fingerFrame);
+  audio.repeats[0](0);
+  const oldDraw = audio.drawn[0];
+  audio.handlers.kit('UK garage');
+  for (let i = 0; i < 16; i++) audio.repeats[0](0.125 + i * 0.125);
+  oldDraw.fn();
+  const note = audio.emitted.find(([type]) => type === 'note');
+  assert.equal(note[1].kit, 'French house');
+  assert.equal(oldDraw.time, audio.created[0].events[0].time);
+});
+
+test('rapid kit replacement silences and disposes each replaced kit once', async () => {
+  const audio = createAudioHarness();
+  audio.handlers.kit('UK garage');
+  audio.handlers.kit('Ambient');
+  audio.handlers.kit('Russian hardbass');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(audio.created.slice(0, 3).map((kit) => kit.silences), [1, 1, 1]);
+  assert.deepEqual(audio.created.slice(0, 3).map((kit) => kit.disposals), [1, 1, 1]);
+});
