@@ -29,7 +29,7 @@ Type: **Fraunces** (roman for BPM numerals, italic for title, voice names and em
 ## Voice panels
 
 - Each voice is a black ferrofluid ball in a backlit window. Spikes rise on the beat and the ball stays smooth between beats.
-- The ball follows the smoothed signal. A player note ripples its ball; the pulse trace and BPM remain beside it. BPM is rounded, or `--` while unavailable.
+- A player note ripples its ball; the pulse trace and BPM remain beside it. BPM is rounded, or `--` while unavailable.
 - With no finger, the ball and window are grey, the BPM dims, and the label asks for a finger on that sensor.
 
 ## Music
