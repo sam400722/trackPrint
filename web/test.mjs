@@ -34,3 +34,15 @@ import { createChannel } from './signal.js';
   }
 }
 console.log('signal ok');
+
+import { fields, note, mapVoice } from './audio/mapping.js';
+
+assert.deepEqual(fields((10 << 10) | (6 << 6) | (5 << 3) | 3, [3, 3, 4, 4]), [3, 5, 6, 10]);
+assert.equal(note(0, 0), 45);   // A2
+assert.equal(note(5, 0), 57);   // wraps to next octave: A3
+assert.equal(note(7, 1), 74);   // index 7 = octave+1, degree 2 (D)
+// raw = fields a=1, b=0, c=15, d=0, shifted past the 2 skipped low bits
+assert.deepEqual(mapVoice('drums', ((15 << 6) | 1) << 2), { drum: 'snare', velocity: 1 });
+assert.deepEqual(mapVoice('pad', 0), { notes: [57, 62, 67], velocity: 0.4, cutoff: 200 });
+assert.deepEqual(mapVoice('bass', 0), { notes: [45], velocity: 0.4, cutoff: 200 });
+console.log('mapping ok');
