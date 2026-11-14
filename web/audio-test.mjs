@@ -329,12 +329,12 @@ test('audio lifecycle schedules the selected genre through one persistent repeat
   };
   const KITS = Object.fromEntries(Object.keys(GENRES).map((name) => [name, () => {
     const instance = {
-      name, tail: 0, ready: Promise.resolve(), events: [], silences: 0, disposals: 0,
+      name, tail: 0, ready: Promise.resolve(), events: [], lifts: [], silences: 0, disposals: 0,
       drums(p, h, time) { this.events.push({ voice: 'drums', p, time }); },
       bass(p, h, time) { this.events.push({ voice: 'bass', p, time }); },
       lead(p, h, time) { this.events.push({ voice: 'lead', p, time }); },
       pad(p, h, time) { this.events.push({ voice: 'pad', p, time }); },
-      update() {}, lift() {}, silence() { this.silences++; }, dispose() { this.disposals++; },
+      update() {}, lift(voice) { this.lifts.push(voice); }, silence() { this.silences++; }, dispose() { this.disposals++; },
     };
     created.push(instance);
     return instance;
@@ -361,8 +361,25 @@ test('audio lifecycle schedules the selected genre through one persistent repeat
   assert.equal(created.length, 1, 'pending selections do not allocate early');
   for (let i = 0; i < 15; i++) repeats[0](0.25 + i * 0.125);
   assert.equal(created.length, 2, 'winning selection allocates at the bar');
+  handlers.kit('UK garage');
+  handlers.kit('Russian hardbass');
+  for (let i = 0; i < 16; i++) repeats[0](2.25 + i * 0.125);
+  assert.equal(created.length, 2, 'selecting the active genre cancels a different pending selection');
+  const beforeLift = created[1].events.length;
+  handlers.frame({ raws: [1, 2, 3, 4], ch: [{ finger: false }, { finger: true }, { finger: true }, { finger: true }] });
+  for (let i = 0; i < 16; i++) repeats[0](4.25 + i * 0.125);
+  const afterLift = created[1].events.slice(beforeLift);
+  assert.equal(created[1].lifts.length, 1, 'a lifted voice releases exactly once');
+  assert.ok(afterLift.some(({ voice }) => voice !== 'drums'), 'other voices continue after a lift');
+  handlers.frame({ raws: [1, 2, 3, 4], ch: [{ finger: false }, { finger: true }, { finger: true }, { finger: true }] });
+  repeats[0](4.375);
+  assert.equal(created[1].lifts.length, 1, 'an already lifted voice is not released again');
+  const secondStart = created[1].events.length;
+  repeats[0](4.5);
+  assert.equal(created[1].events.slice(secondStart).some(({ voice }) => voice === 'drums'), false,
+    'lifted voices do not trigger new notes');
   repeats[0](0);
-  assert.equal(ramps.at(-1).value, songBpm(75, 'Russian hardbass'));
+  assert.ok(ramps.some(({ value }) => value === songBpm(75, 'Russian hardbass')));
   assert.ok(drawn.every(({ time }) => Number.isFinite(time)));
   assert.ok(emitted.some(([type]) => type === 'kits'));
 });

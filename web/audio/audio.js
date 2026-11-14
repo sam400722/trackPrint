@@ -48,7 +48,11 @@ resetState();
 
 on('frame', ({ raws, ch }) => {
   last = raws;
-  hearts = ch.map((channel, index) => trackers[index](channel));
+  const nextHearts = ch.map((channel, index) => trackers[index](channel));
+  nextHearts.forEach((heart, index) => {
+    if (hearts[index]?.on && !heart.on) kit.lift(VOICES[index]);
+  });
+  hearts = nextHearts;
 });
 
 function disposeLater(old) {
@@ -135,6 +139,8 @@ on('kit', (name) => {
   selectedName = name;
   if (!running) {
     activate(name);
+  } else if (name === activeName) {
+    pendingName = null;
   } else if (name !== activeName) {
     pendingName = name;
   }
