@@ -4,6 +4,7 @@
 // automatically when it ends (disconnect, error, or a new Connect/Simulate) if it ran 5 s or more.
 import { on, VOICES } from '../bus.js';
 import { simSensors } from '../serial.js';
+import { FINGER_MIN } from '../signal.js';
 
 const MIN_MS = 5000;              // shorter recordings are not auto-saved
 const CHUNK = 50 * 60 * 60 * 2;   // ponytail: ~2 h of frames per file (~45 MB); a longer run saves and carries on in a new file
@@ -24,7 +25,7 @@ function csv(r) {
     `# started ${r.started.toISOString()} (local ${r.started.toString()})`,
     `# source ${r.source}${params() ? `, page options ${params()}` : ''}${r.part > 1 ? `, part ${r.part}` : ''}`,
     `# simulated sensors: ${r.source === 'serial' ? simSensors().map((ch) => ch + 1).join(',') || 'none' : 'all'}`,
-    '# sensors 1-4 = ' + VOICES.join(', ') + '. raw: sensor IR counts (0 = sensor missing, < 50000 = no finger)',
+    '# sensors 1-4 = ' + VOICES.join(', ') + '. raw: sensor IR counts (0 = sensor missing, < ' + FINGER_MIN + ' = no finger)',
     '# held = bad read replaced by the filter; bpm/inst/amp/ac = beat detector output; t_ms = arrival in the browser',
   ];
   return [...meta, HEADER, ...r.rows].join('\n') + '\n';

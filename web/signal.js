@@ -1,7 +1,9 @@
 // Per-channel pulse processing. One step() call per sample.
 
 // ponytail: fixed threshold; tune per sensor/LED power. Raw IR below this = no finger.
-export const FINGER_MIN = 50000;
+// Measured on the Pi's four sensors (LED power 0x1F): no finger reads 500-7,000, and a finger
+// reads 45,000-90,000, with sensor 2 at only 45,000-49,000 unless pressed hard. 50000 missed it.
+export const FINGER_MIN = 30000;
 
 // Beat detection follows the middle of the last WINDOW_S seconds of the pulse wave, so
 // the reading creeping up while a finger settles doesn't hide beats. A beat is an upward

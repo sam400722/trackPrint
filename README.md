@@ -66,7 +66,7 @@ journalctl -u trackprint -f                                     # "sensor on i2c
 sudo systemctl stop trackprint && python3 /opt/trackprint/trackprint.py -   # print lines to the terminal
 sudo systemctl start trackprint
 ```
-A value jumps above ~50000 with a finger on.
+A value jumps above ~45000 with a finger on (the app counts anything over 30000 as a finger).
 
 Connect the Pi's **USB** port (not PWR IN) to the laptop. That one cable powers the Pi and carries the data. The Pi takes about 30 s to boot, and then it shows up as a serial port (`/dev/cu.usbmodem*` on a Mac). Shut it down with `sudo poweroff` before unplugging, so the SD card doesn't get corrupted.
 
