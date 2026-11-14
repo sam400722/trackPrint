@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flatline ferrofluid mockup</title>
+<style>
+@font-face { font-family: Fraunces; font-style: normal; font-weight: 100 900; src: url(../../../web/ui/fonts/fraunces-latin-wght-normal.woff2) format("woff2"); }
+@font-face { font-family: Fraunces; font-style: italic; font-weight: 100 900; src: url(../../../web/ui/fonts/fraunces-latin-wght-italic.woff2) format("woff2"); }
+@font-face { font-family: Nunito; font-style: normal; font-weight: 200 1000; src: url(../../../web/ui/fonts/nunito-latin-wght-normal.woff2) format("woff2"); }
+
+:root {
+  --drums: #ff3b1f; --bass: #1f6bff; --lead: #ffd400; --pad: #ff2d87;
+  --strip: 40px; --u: calc((100vh - var(--strip)) / 100);
+  --bg: #070708; --bg2: #17181c; --text: #f3f2ee; --muted: rgb(243 242 238 / .56); --line: rgb(243 242 238 / .16);
+  --num: Fraunces, Georgia, serif; --ui: Nunito, system-ui, sans-serif; --radius: 999px;
+  --title: italic 400 calc(4.2 * var(--u)) Fraunces, Georgia, serif; --title-track: 0; --num-w: 400; --num-track: -.01em; --lab-style: italic;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { background: #1b1b1d; }
+
+/* the strip is the mockup's own remote control, not part of the design */
+#strip { position: fixed; inset: 0 0 auto 0; height: var(--strip); z-index: 5; display: flex; align-items: center; gap: 18px; padding: 0 14px;
+  font: 12px system-ui, sans-serif; color: #c9c9cc; background: #1b1b1d; border-bottom: 1px solid #333; white-space: nowrap; overflow-x: auto; }
+#strip b { font-weight: 600; color: #fff; }
+#strip .grp { display: flex; align-items: center; gap: 6px; }
+#strip button { font: inherit; color: #c9c9cc; background: #2a2a2d; border: 1px solid #444; border-radius: 4px; padding: 4px 9px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+#strip button:hover { border-color: #888; }
+#strip button[aria-pressed=true] { background: #e9e9ea; color: #111; border-color: #e9e9ea; }
+#strip button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+#strip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+#app { position: fixed; inset: var(--strip) 0 0 0; color: var(--text); overflow: hidden;
+  background: radial-gradient(ellipse 75% 70% at 50% 40%, var(--bg2), var(--bg)); }
+#app canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+
+header { position: absolute; inset: 0 0 auto 0; height: calc(10 * var(--u)); display: flex; align-items: center; justify-content: space-between;
+  padding: 0 calc(4 * var(--u)); z-index: 2; }
+h1 { margin: 0; font: var(--title); letter-spacing: var(--title-track); }
+.controls { display: flex; align-items: center; gap: calc(1.2 * var(--u)); }
+.controls button, .controls select, #banner button { font: 500 calc(1.75 * var(--u)) var(--ui); color: var(--text); background: transparent;
+  border: 1px solid var(--line); border-radius: var(--radius); padding: calc(.9 * var(--u)) calc(1.7 * var(--u)); cursor: pointer;
+  transition: border-color .15s, background-color .15s, transform .1s; }
+.controls select { appearance: none; }
+.controls button:hover, .controls select:hover, #banner button:hover { border-color: var(--text); }
+.controls button:active, #banner button:active { transform: translateY(1px); }
+.controls .primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+.controls .primary:hover { background: color-mix(in srgb, var(--text) 86%, var(--bg)); }
+.controls button:focus-visible, .controls select:focus-visible, #banner button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+#status { margin: 0 0 0 calc(1 * var(--u)); font: 400 calc(1.75 * var(--u)) var(--ui); color: var(--muted); display: flex; align-items: center; gap: calc(.8 * var(--u)); min-width: calc(9 * var(--u)); }
+#status::before { content: ""; width: calc(.9 * var(--u)); height: calc(.9 * var(--u)); border-radius: 50%; background: var(--line); }
+#status[data-state=running] { color: var(--text); }
+#status[data-state=running]::before { background: var(--text); }
+
+#banner { position: absolute; z-index: 3; top: calc(11 * var(--u)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: calc(2 * var(--u));
+  padding: calc(.8 * var(--u)) calc(.8 * var(--u)) calc(.8 * var(--u)) calc(2.2 * var(--u)); border-radius: var(--radius);
+  font: 400 calc(1.75 * var(--u)) var(--ui); background: color-mix(in srgb, var(--bg2) 88%, var(--text)); border: 1px solid var(--line); }
+#banner[hidden], #hint[hidden] { display: none; }
+
+#text { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.bpm, .lab { position: absolute; white-space: nowrap; line-height: 1; }
+.bpm { font-family: var(--num); font-weight: var(--num-w); letter-spacing: var(--num-track); font-variant-numeric: tabular-nums; }
+.lab { font-family: var(--num); font-style: var(--lab-style); color: var(--muted); }
+.bpm.off { color: var(--line); }
+#hint { position: absolute; left: 0; right: 0; top: calc(75 * var(--u)); margin: 0; text-align: center; color: var(--muted);
+  font: var(--lab-style) 400 calc(2.3 * var(--u)) var(--num); }
+#err { position: absolute; inset: 40% 10% auto; z-index: 9; font: 14px ui-monospace, monospace; color: #f66; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="strip">
+  <b>Mockup controls</b>
+  <span class="grp">Fingers <span id="fingers" class="grp"></span></span>
+  <span class="grp">
+    <button id="rm" type="button" aria-pressed="false">Reduced motion</button>
+    <button id="bn" type="button" aria-pressed="false">Disconnected banner</button>
+    <button id="replay" type="button">Replay intro</button>
+  </span>
+</div>
+
+<div id="app">
+  <canvas id="gl"></canvas>
+  <canvas id="ov"></canvas>
+  <header>
+    <h1>flatline</h1>
+    <div class="controls">
+      <button class="primary" type="button">Connect sensors</button>
+      <button type="button">Simulate</button>
+      <button type="button">Performance view</button>
+      <select aria-label="Kit"><option>Kit: Analog</option></select>
+      <p id="status" data-state="idle">Ready</p>
+    </div>
+  </header>
+  <div id="banner" hidden><span>Sensors disconnected</span><button type="button">Reconnect</button></div>
+  <div id="text"></div>
+  <p id="hint">Connect the sensors, or press Simulate to hear a demo.</p>
+  <div id="err"></div>
+</div>
+
+<script>
+// ---- constants and state
+const VOICES = ['drums', 'bass', 'lead', 'pad'], BPMS = [72, 64, 88, 58];   // demo bpm per voice
+const READY_S = 1.5;    // finger down this long before a BPM shows
+const SPLIT_MS = 2000;  // a finger up this long splits the merged blob
+const SLIDE_S = 1.6;    // assign <-> merged transition
+// blob body radii, in u (1% of app height); the window behind each body is WINDOW_K times its body radius
+const ASSIGN_R_MAX = 7.92, ASSIGN_R_COL = .176;   // assigning state: at most this many u, and at most this fraction of a column width
+const ROW_R = 3.52, MERGED_R = 13.2;              // bottom row blobs; the big merged blob
+const WINDOW_K = 1.67;                            // window radius / body radius (body is 12% smaller than before, windows unchanged)
+// the per-player field F: an underdamped spring pulled to T on each beat (T decays), L lags F; spikes rise with F and L
+const SPRING_K = 220, SPRING_C = 16;              // spring stiffness and damping
+const T_DECAY = .26, LIFT_DECAY = .15, RIP_DECAY = .22, FL_DECAY = .45;   // seconds: beat target, reduced-motion lift, note ripple, window flash
+const L_LAG = .11, PRES_TAU = .25;                // seconds: lag of L behind F; finger presence easing
+const qs = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+const root = document.documentElement, app = $('app');
+const lerp = (a, b, k) => a + (b - a) * k, clamp01 = (x) => Math.min(1, Math.max(0, x));
+const ease = (x) => (x < .5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+const R = Math.random, TAU = Math.PI * 2;
+const hex3 = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const COLS = VOICES.map((v) => css(`--${v}`)), COLR = COLS.map(hex3);
+const MUTED = css('--muted'), LINE = css('--line');
+
+const P = VOICES.map((v, i) => ({ v, bpm: BPMS[i], per: 60 / BPMS[i], off: i * .21, down: false, downAt: 0, pres: 0, bi: 0, T: 0, F: 0, vel: 0, L: 0, rip: 0, lift: 0, fl: 0, bump: 0, m: 0, cx: 0 }));
+let st = { merged: false, upAt: null }, prog = 0, rm = matchMedia('(prefers-reduced-motion: reduce)').matches || qs.has('rm');   // ?rm forces it, for screenshots
+
+// ---- mergeStep
+// the rule Stage 2 ports and tests: all four ready -> merged; any one not ready for SPLIT_MS -> split
+function mergeStep(st, ready, now) {
+  if (ready.every(Boolean)) return { merged: true, upAt: null };
+  if (!st.merged) return st;
+  const upAt = st.upAt ?? now;
+  return now - upAt > SPLIT_MS ? { merged: false, upAt: null } : { merged: true, upAt };
+}
+
+// ---- mockup strip
+const fingerBtns = VOICES.map((v, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.innerHTML = `<i style="background:${COLS[i]}"></i>${v}`;
+  b.onclick = () => setFinger(i, !P[i].down);
+  $('fingers').append(b); return b;
+});
+function setFinger(i, down) {
+  P[i].down = down; P[i].downAt = performance.now() / 1000;
+  fingerBtns[i].setAttribute('aria-pressed', down);
+}
+$('rm').setAttribute('aria-pressed', rm);
+$('rm').onclick = () => { rm = !rm; $('rm').setAttribute('aria-pressed', rm); };
+$('bn').onclick = () => { $('banner').hidden = !$('banner').hidden; $('bn').setAttribute('aria-pressed', !$('banner').hidden); };
+let timers = [];
+function intro() {
+  timers.forEach(clearTimeout);
+  P.forEach((_, i) => setFinger(i, false));
+  timers = P.map((_, i) => setTimeout(() => setFinger(i, true), 900 + i * 1300));
+}
+$('replay').onclick = intro;
+// ?f=1011 sets fingers at once, &skip jumps to the settled state, &peak holds the crown up (for screenshots)
+if (qs.has('f')) {
+  [...qs.get('f')].forEach((ch, i) => i < 4 && setFinger(i, ch === '1'));
+  if (qs.has('skip')) { P.forEach((p) => { p.downAt = -99; p.pres = +p.down; }); prog = +P.every((p) => p.down); }
+} else intro();
+
+// ---- WebGL setup
+const glc = $('gl'), ov = $('ov'), c = ov.getContext('2d');
+const gl = glc.getContext('webgl2', { premultipliedAlpha: true, antialias: false });
+let W = 0, H = 0, u = 1, dpr = 1, Gx = null;   // app size px, 1% of height, device ratio; Gx = GL resources (null without WebGL2)
+const Pr = {};   // programs, each { p, l: uniform locations }
+const HDR = '#version 300 es\nprecision highp float;precision highp sampler2D;in vec2 v;out vec4 o;\n';
+const VQ = '#version 300 es\nlayout(location=0) in vec2 a;out vec2 v;void main(){v=a*.5+.5;gl_Position=vec4(a,0,1);}';
+const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) $('err').textContent += gl.getShaderInfoLog(s); return s; };
+const mkP = (vs, fs) => { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p); return { p, l: {} }; };
+if (!gl) $('err').textContent = 'WebGL2 is not available in this browser.';
+else if (!gl.getExtension('EXT_color_buffer_float')) $('err').textContent = 'Float render targets (EXT_color_buffer_float) are not available in this browser, so the fluid cannot be drawn.';
+else {
+  const vq = gl.createVertexArray();
+  gl.bindVertexArray(vq); gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);   // one triangle covers the target; stays bound
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  Gx = { res: [] };   // + dye, vel, pre, div, curl (see build)
+}
+const L = (P, n) => (P.l[n] ??= gl.getUniformLocation(P.p, n));   // cached uniform location
+const TX = (P, n, i, t) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t.t); gl.uniform1i(L(P, n), i); };
+const mk = (w, h) => {   // RGBA16F texture + framebuffer
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, w, h);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) $('err').textContent = 'Float render target is not supported by this GPU.';
+  const o = { t, f, w, h }; Gx.res.push(o); return o;
+};
+const dbl = (w, h) => { let a = mk(w, h), b = mk(w, h); return { get r() { return a; }, get w() { return b; }, swap() { [a, b] = [b, a]; } }; };   // ping-pong pair: read r, write w
+function build() {   // (re)create the dye simulation targets for the current aspect
+  Gx.res.forEach((o) => { gl.deleteTexture(o.t); gl.deleteFramebuffer(o.f); }); Gx.res = [];
+  const dh = Math.max(8, Math.round(DYE_W * H / W)), vh = Math.max(8, Math.round(VEL_W * H / W));
+  Gx.dye = dbl(DYE_W, dh); Gx.vel = dbl(VEL_W, vh); Gx.pre = dbl(VEL_W, vh); Gx.div = mk(VEL_W, vh); Gx.curl = mk(VEL_W, vh);
+}
+function resize() {
+  const b = app.getBoundingClientRect();
+  W = b.width; H = b.height; u = H / 100; dpr = Math.min(devicePixelRatio || 1, 2);
+  for (const cv of [glc, ov]) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (Gx && W) build();
+}
+new ResizeObserver(resize).observe(app);
+// full-screen pass into a target (null = canvas)
+function pass(P, t, set) {
+  gl.useProgram(P.p); set?.();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.f : null); gl.viewport(0, 0, t ? t.w : glc.width, t ? t.h : glc.height);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+// ---- dye simulation: stable fluids (velocity + dye) that colours the merged window
+const DYE_W = 640, VEL_W = 160, JACOBI = 16;   // dye texture width; velocity/pressure/divergence/curl width (heights follow the aspect); pressure iterations
+const VORT = 20, PRESS_KEEP = .8;              // vorticity confinement strength; fraction of last frame's pressure kept as the solver's start
+const VEL_DISS = .975, DYE_DISS = .9994, DYE_SPEED = .5;   // per-frame velocity and dye decay; dye advects at this fraction of velocity speed
+const DYE_FS = {
+  adv: HDR + 'uniform sampler2D uV,uS;uniform float uDt,uDiss,uAsp;void main(){vec2 p=v-uDt*texture(uV,v).xy*vec2(1./uAsp,1.);o=uDiss*texture(uS,p);}',
+  curl: HDR + 'uniform sampler2D uV;uniform vec2 uT;void main(){float L=texture(uV,v-vec2(uT.x,0)).y,R=texture(uV,v+vec2(uT.x,0)).y,B=texture(uV,v-vec2(0,uT.y)).x,T=texture(uV,v+vec2(0,uT.y)).x;o=vec4(.5*(R-L-T+B),0,0,1);}',
+  vort: HDR + 'uniform sampler2D uV,uC;uniform vec2 uT;uniform float uStr,uDt;void main(){float L=texture(uC,v-vec2(uT.x,0)).x,R=texture(uC,v+vec2(uT.x,0)).x,B=texture(uC,v-vec2(0,uT.y)).x,T=texture(uC,v+vec2(0,uT.y)).x,C=texture(uC,v).x;vec2 f=.5*vec2(abs(T)-abs(B),abs(R)-abs(L));f/=length(f)+1e-4;f*=uStr*C;f.y*=-1.;o=vec4(texture(uV,v).xy+f*uDt,0,1);}',
+  div: HDR + 'uniform sampler2D uV;uniform vec2 uT;void main(){float L=texture(uV,v-vec2(uT.x,0)).x,R=texture(uV,v+vec2(uT.x,0)).x,B=texture(uV,v-vec2(0,uT.y)).y,T=texture(uV,v+vec2(0,uT.y)).y;o=vec4(.5*(R-L+T-B),0,0,1);}',
+  jac: HDR + 'uniform sampler2D uP,uD;uniform vec2 uT;void main(){float L=texture(uP,v-vec2(uT.x,0)).x,R=texture(uP,v+vec2(uT.x,0)).x,B=texture(uP,v-vec2(0,uT.y)).x,T=texture(uP,v+vec2(0,uT.y)).x;o=vec4((L+R+B+T-texture(uD,v).x)*.25,0,0,1);}',
+  grad: HDR + 'uniform sampler2D uP,uV;uniform vec2 uT;void main(){float L=texture(uP,v-vec2(uT.x,0)).x,R=texture(uP,v+vec2(uT.x,0)).x,B=texture(uP,v-vec2(0,uT.y)).x,T=texture(uP,v+vec2(0,uT.y)).x;o=vec4(texture(uV,v).xy-.5*vec2(R-L,T-B),0,1);}',
+  clr: HDR + 'uniform sampler2D uS;uniform float uK;void main(){o=uK*texture(uS,v);}',
+  spl: HDR + `uniform vec2 uC,uPush;uniform float uR,uAsp,uA,uSw;uniform int uM;uniform vec3 uCol;
+void main(){ vec2 d=(v-uC)*vec2(uAsp,1.); float g=exp(-dot(d,d)/(uR*uR));
+  if(uM==0) o=vec4(uSw*g*vec2(-d.y,d.x)/uR+uPush*g,0,0); else o=vec4(uCol,uA*g); }`,
+};
+if (Gx) for (const k in DYE_FS) Pr[k] = mkP(VQ, DYE_FS[k]);
+const shade = (c) => { const s = R(); return c.map((v) => (s < .5 ? v * (.45 + s) : v + (1 - v) * (s - .5) * .7)); };   // lighter or darker take on a colour
+// one gaussian injection: swirl/push impulse into velocity, colour mixed into dye
+function splat(e) {
+  const { vel, dye } = Gx, set = (m) => () => {
+    gl.uniform2f(L(Pr.spl, 'uC'), e.x / W, 1 - e.y / H); gl.uniform1f(L(Pr.spl, 'uR'), e.rad / H); gl.uniform1f(L(Pr.spl, 'uAsp'), W / H);
+    gl.uniform1i(L(Pr.spl, 'uM'), m); gl.uniform3fv(L(Pr.spl, 'uCol'), e.col || [0, 0, 0]); gl.uniform1f(L(Pr.spl, 'uA'), e.amt || 0);
+    gl.uniform1f(L(Pr.spl, 'uSw'), e.sw || 0); gl.uniform2f(L(Pr.spl, 'uPush'), 0, 0);
+  };
+  gl.enable(gl.BLEND);
+  if (e.sw) { gl.blendFunc(gl.ONE, gl.ONE); pass(Pr.spl, vel.r, set(0)); }
+  if (e.amt) { gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ZERO, gl.ONE); pass(Pr.spl, dye.r, set(1)); }
+  gl.disable(gl.BLEND);
+}
+// stable fluids: vorticity confinement, pressure projection, advection
+function solve(dt) {
+  const { vel, dye, pre, div, curl } = Gx, T = [1 / vel.r.w, 1 / vel.r.h], t2 = (P) => gl.uniform2fv(L(P, 'uT'), T);
+  pass(Pr.curl, curl, () => { TX(Pr.curl, 'uV', 0, vel.r); t2(Pr.curl); });
+  pass(Pr.vort, vel.w, () => { TX(Pr.vort, 'uV', 0, vel.r); TX(Pr.vort, 'uC', 1, curl); t2(Pr.vort); gl.uniform1f(L(Pr.vort, 'uStr'), VORT); gl.uniform1f(L(Pr.vort, 'uDt'), dt); }); vel.swap();
+  pass(Pr.div, div, () => { TX(Pr.div, 'uV', 0, vel.r); t2(Pr.div); });
+  pass(Pr.clr, pre.w, () => { TX(Pr.clr, 'uS', 0, pre.r); gl.uniform1f(L(Pr.clr, 'uK'), PRESS_KEEP); }); pre.swap();
+  for (let i = 0; i < JACOBI; i++) { pass(Pr.jac, pre.w, () => { TX(Pr.jac, 'uP', 0, pre.r); TX(Pr.jac, 'uD', 1, div); t2(Pr.jac); }); pre.swap(); }
+  pass(Pr.grad, vel.w, () => { TX(Pr.grad, 'uP', 0, pre.r); TX(Pr.grad, 'uV', 1, vel.r); t2(Pr.grad); }); vel.swap();
+  const adv = (src, tgt, diss, k) => pass(Pr.adv, tgt.w, () => { TX(Pr.adv, 'uV', 0, vel.r); TX(Pr.adv, 'uS', 1, src.r); gl.uniform1f(L(Pr.adv, 'uDt'), dt * k); gl.uniform1f(L(Pr.adv, 'uDiss'), diss); gl.uniform1f(L(Pr.adv, 'uAsp'), W / H); });
+  adv(vel, vel, VEL_DISS, 1); vel.swap(); adv(dye, dye, DYE_DISS, DYE_SPEED); dye.swap();
+}
+// one frame of the merged window's dye: slow colours that drift and fold, a stir per beat, then the solve
+function dyeStep(dt, big, cyB, Rg, RW) {
+  const inj = [], X = W / 2, Y = 38 * u;
+  for (let k = 0; k < 4; k++) { const a = k * 1.5708 + .785; inj.push({ x: X + Math.cos(a) * .45 * RW, y: Y + Math.sin(a) * .45 * RW, rad: .6 * RW, col: COLR[k], amt: .05 }); }
+  if (!rm) for (let k = 0; k < 4; k++) { const a = R() * TAU, r = Math.sqrt(R()) * .8 * RW; inj.push({ x: X + Math.cos(a) * r, y: Y + Math.sin(a) * r, rad: .045 * RW * (.5 + R()), col: shade(COLR[R() * 4 | 0]), amt: .9, sw: (R() - .5) * 1.4 }); }
+  if (!rm) for (let k = 0; k < 2; k++) { const a = R() * TAU, r = Math.sqrt(R()) * .7 * RW; inj.push({ x: X + Math.cos(a) * r, y: Y + Math.sin(a) * r, rad: .16 * RW, sw: (R() < .5 ? -1 : 1) * (.7 + R()) }); }   // stirrers
+  if (!rm && big > .5) P.forEach((p, k) => { if (p.bump) inj.push({ x: X, y: cyB, rad: .26 * RW, col: shade(COLR[k]), amt: .6, sw: (R() < .5 ? -1 : 1) * .6 }); });   // a player's beat
+  for (const e of inj) splat(e);
+  if (!rm) solve(dt);
+}
+
+// ---- fluid shader: raymarched black-chrome spiked sphere in a backlit window; four small blobs + one merged blob in one pass
+const RAY = `#version 300 es
+precision highp float;
+uniform float uT, uFade, uWr;   // time, fade, window radius / body radius
+uniform vec2 uRes;
+uniform sampler2D uDye;
+uniform vec3 uB[5];     // x, y (px, y up), radius px. [0..3] small blobs, [4] the merged one (0 = hidden)
+uniform vec3 uCol[4];
+uniform vec4 uS[4];     // field F, lagged L, note ripple, presence
+uniform float uLift[4];
+uniform vec4 uFl;       // beat flash per player
+const float PI = 3.14159265359, PHI = 1.61803398875, BOUND = 1.6;   // BOUND: march start radius in blob units (body 1 + spike height)
+float gN, gW, gHs; bool gBig; vec4 gOne, fF, fL, fR; mat3 gRot;
+float mS, mH; vec4 mWt;   // set by map(): spike profile, spike height, colour weights
+out vec4 o;
+// nearest point of an n-point Fibonacci sphere lattice: x = index, y = distance (Keinert et al.)
+vec2 isf(vec3 p, float n) {
+  float m = 1. - 1. / n, phi = min(atan(p.y, p.x), PI), ct = p.z;
+  float k = max(2., floor(log(n * PI * sqrt(5.) * (1. - ct * ct)) / log(PHI + 1.)));
+  float Fk = pow(PHI, k) / sqrt(5.);
+  vec2 F = vec2(floor(Fk + .5), floor(Fk * PHI + .5));
+  vec2 ka = 2. * F / n, kb = 2. * PI * (fract((F + 1.) * PHI) - (PHI - 1.));
+  mat2 iB = mat2(ka.y, -ka.x, kb.y, -kb.x) / (ka.y * kb.x - ka.x * kb.y);
+  vec2 c = floor(iB * vec2(phi, ct - m));
+  float d = 8., j = 0.;
+  for (int s = 0; s < 4; s++) {
+    vec2 uv = vec2(float(s - 2 * (s / 2)), float(s / 2));
+    float i = clamp(floor(dot(F, uv + c) + .5), 0., n - 1.);
+    float ph = 2. * PI * fract(i * PHI), c2 = m - 2. * i / n, s2 = sqrt(max(0., 1. - c2 * c2));
+    vec3 q = vec3(cos(ph) * s2, sin(ph) * s2, c2) - p;
+    float dd = dot(q, q);
+    if (dd < d) { d = dd; j = i; }
+  }
+  return vec2(j, sqrt(d));
+}
+float hash(float x) { return fract(sin(x * 12.9898 + 1.7) * 43758.5453); }
+mat3 rot(float a, float b) {
+  float ca = cos(a), sa = sin(a), cb = cos(b), sb = sin(b);
+  return mat3(cb, 0, -sb, 0, 1, 0, sb, 0, cb) * mat3(1, 0, 0, 0, ca, sa, 0, -sa, ca);
+}
+vec4 weights(vec3 d) {   // merged blob: four colour regions that drift
+  vec3 w = d + .34 * sin(2.3 * d.yzx + uT * .35) + .17 * sin(5.1 * d.zxy - uT * .27);
+  vec4 a;
+  for (int k = 0; k < 4; k++) {
+    float an = float(k) * 1.5708 + uT * .12 + .6 * sin(uT * .21 + float(k));
+    vec3 e = w - normalize(vec3(cos(an), sin(an), .6));
+    a[k] = -7. * dot(e, e);
+  }
+  a = exp(5. * (a - max(max(a.x, a.y), max(a.z, a.w))));
+  return a / (a.x + a.y + a.z + a.w);
+}
+float map(vec3 p) {
+  float l = length(p); vec3 d0 = p / l;
+  vec4 w = gBig ? weights(d0) : gOne;
+  float F = max(dot(w, fF), 0.), L = max(dot(w, fL), 0.), R = dot(w, fR);
+  vec2 sf = isf(gRot * d0, gN);
+  float h1 = hash(sf.x), h2 = hash(sf.x + 37.);
+  float H = gHs * mix(F, L, h1) * (.55 + .45 * h2);   // spikes rise at slightly different times and heights
+  float s = max(0., 1. - sf.y / gW);
+  float body = 1. - .12 * F + .018 * (sin(3. * d0.x + uT * 1.1) + sin(4. * d0.y - uT * 1.4) + sin(3.5 * d0.z + uT * .9))
+    + .022 * R * sin(22. * acos(clamp(d0.y, -1., 1.)) - uT * 16.);   // notes: rings running down the surface
+  mS = s; mH = H; mWt = w;
+  return l - body - H * s * sqrt(s);
+}
+float env(vec3 r) {
+  float top = smoothstep(.3, .55, r.y) * smoothstep(.75, .25, abs(r.x - .1));
+  float strip = smoothstep(.1, 0., abs(r.x + .72) - .06) * smoothstep(.75, .2, abs(r.y + .05));
+  float spot = smoothstep(.12, 0., length(r.xy - vec2(.55, -.5)) - .05);
+  return 1.1 * top + .8 * strip + .6 * spot + .12 * smoothstep(-.3, -.9, r.y) + .04;
+}
+vec4 blob(vec2 q, float rpx, float Fm) {
+  float l2 = dot(q, q);
+  if (l2 > BOUND * BOUND) return vec4(0);
+  float z = sqrt(BOUND * BOUND - l2), k = 1.5 * gHs * clamp(Fm, 0., 1.3) / gW, st = .95 / sqrt(1. + k * k);
+  vec3 p = vec3(q, z), pc = p; float md = 1e3; bool hit = false;
+  for (int i = 0; i < 72; i++) {
+    float d = map(p);
+    if (d < md) { md = d; pc = p; }
+    if (d < .0015) { hit = true; break; }
+    p.z -= max(d, .002) * st;
+    if (p.z < -z) break;
+  }
+  float a = hit ? 1. : smoothstep(2.5 / rpx, 0., md);
+  if (a <= 0.) return vec4(0);
+  vec2 e = vec2(1, -1) * .003;
+  vec3 n = normalize(e.xyy * map(pc + e.xyy) + e.yyx * map(pc + e.yyx) + e.yxy * map(pc + e.yxy) + e.xxx * map(pc + e.xxx));
+  map(pc);
+  vec3 c = vec3(0); float lift = 0.;
+  for (int j = 0; j < 4; j++) { c += mWt[j] * mix(vec3(.17, .18, .2), uCol[j], uS[j].w); lift += mWt[j] * uLift[j]; }
+  vec3 r = reflect(vec3(0, 0, -1), n);
+  float fr = pow(1. - clamp(n.z, 0., 1.), 3.);
+  float gl = .9 * pow(max(dot(r, normalize(vec3(-.4, .7, .6))), 0.), 40.) + .5 * pow(max(dot(r, normalize(vec3(.7, -.2, .5))), 0.), 60.);   // two narrow white glints
+  vec3 col = vec3(.012) + env(r) * .9 * (.3 + .7 * fr) + mix(c, vec3(1), .35) * fr * fr * 1.3 + gl * 1.3;
+  col *= 1. - .5 * clamp(mH * 2., 0., 1.) * (1. - mS) * (1. - mS);  // valleys between spikes sit in shadow
+  return vec4(col * (1. + .6 * lift), 1) * a;
+}
+void main() {
+  vec4 acc = vec4(0);
+  vec2 uv = gl_FragCoord.xy / uRes;
+  fF = vec4(uS[0].x, uS[1].x, uS[2].x, uS[3].x); fL = vec4(uS[0].y, uS[1].y, uS[2].y, uS[3].y); fR = vec4(uS[0].z, uS[1].z, uS[2].z, uS[3].z);
+  for (int i = 0; i < 5; i++) {
+    vec3 b = uB[i];
+    if (b.z < 1.) continue;
+    vec2 q = (gl_FragCoord.xy - b.xy) / b.z; float l = length(q);
+    if (l > 2.8) continue;   // beyond window and spike reach
+    gBig = i == 4;
+    gOne = vec4(float(i == 0), float(i == 1), float(i == 2), float(i == 3));
+    vec4 sel = gBig ? vec4(1) : gOne, f = max(fF, 0.) * sel;
+    float Fm = max(max(f.x, f.y), max(f.z, f.w));
+    if (gBig) { gN = 312.; gW = .16; gHs = .36; gRot = rot(.9, uT * .05); }   // spikes: count, width (lattice-distance), height scale (x body radius)
+    else { gN = 132.; gW = .245; gHs = .5; gRot = rot(.8 + float(i), uT * .07 + float(i) * 2.); }
+    {   // the backlit window behind the black body: a glowing disc, brighter with finger presence and the beat flash
+      float qn = l / uWr, pres = gBig ? 1. : dot(gOne, vec4(uS[0].w, uS[1].w, uS[2].w, uS[3].w)), pu = gBig ? 0. : dot(gOne, uFl);
+      if (qn < 1.3) {
+        vec3 wc = gBig ? clamp(texture(uDye, uv).rgb * 1.7 + .07, 0., 1.1) : mix(vec3(.17, .18, .2), uCol[i], pres);   // merged window shows the dye
+        float aa = 1.5 / (b.z * uWr), ins = smoothstep(1. + aa, 1. - aa, qn), mq = min(qn, 1.);
+        float I = ins * mix(1., .62, mq * mq) + (1. - ins) * .62 * pow(max(1. - (qn - 1.) / .18, 0.), 2.);
+        float br = (gBig ? 1.5 : 1.) * (.2 + .8 * pres) * (1. + .35 * pu);
+        vec3 col = mix(wc, vec3(1.), (gBig ? .12 : .4) * pow(max(1. - qn, 0.), 2.)) * I * br;
+        vec4 w = vec4(col, min(1., I * br * 1.1));
+        acc = w + acc * (1. - w.a);
+      }
+    }
+    vec4 bl = blob(q, b.z, Fm);
+    acc = bl + acc * (1. - bl.a);
+  }
+  o = acc * uFade;
+}`;
+if (Gx) Pr.ray = mkP(VQ, RAY);
+const UB = new Float32Array(15), US = new Float32Array(16), ULf = new Float32Array(4), UFl = new Float32Array(4), COL4 = new Float32Array(COLR.flat());
+function drawFluid(t, fade) {
+  pass(Pr.ray, null, () => {
+    TX(Pr.ray, 'uDye', 0, Gx.dye.r);
+    gl.uniform2f(L(Pr.ray, 'uRes'), glc.width, glc.height); gl.uniform1f(L(Pr.ray, 'uFade'), fade); gl.uniform1f(L(Pr.ray, 'uT'), rm ? 0 : t); gl.uniform1f(L(Pr.ray, 'uWr'), WINDOW_K);
+    gl.uniform3fv(L(Pr.ray, 'uB'), UB); gl.uniform3fv(L(Pr.ray, 'uCol'), COL4); gl.uniform4fv(L(Pr.ray, 'uS'), US); gl.uniform1fv(L(Pr.ray, 'uLift'), ULf); gl.uniform4fv(L(Pr.ray, 'uFl'), UFl);
+  });
+}
+
+// ---- layout and per-frame update
+const els = P.map(() => {   // per-player text: BPM and label
+  const bpm = document.createElement('div'), lab = document.createElement('div');
+  bpm.className = 'bpm'; lab.className = 'lab'; $('text').append(bpm, lab);
+  return { bpm, lab };
+});
+let prev = 0;
+function frame(ms) {
+  requestAnimationFrame(frame);
+  if (!Gx || !W) return;
+  const t = ms / 1000, dt = Math.min(.033, Math.max(0, t - prev)); prev = t;
+  tick(t);
+  for (const p of P) {
+    p.pres += (+p.down - p.pres) * (1 - Math.exp(-dt / PRES_TAU));
+    const bi = Math.floor((t - p.off) / p.per);
+    if (bi !== p.bi) { p.bi = bi; if (p.down) p.T = p.lift = p.fl = p.bump = 1; }   // a beat
+    p.T *= Math.exp(-dt / T_DECAY); p.lift *= Math.exp(-dt / LIFT_DECAY); p.rip *= Math.exp(-dt / RIP_DECAY); p.fl *= Math.exp(-dt / FL_DECAY);
+    p.vel += (SPRING_K * (p.T - p.F) - SPRING_C * p.vel) * dt; p.F += p.vel * dt; // underdamped spring: the pull overshoots, then eases
+    p.L += (p.F - p.L) * (1 - Math.exp(-dt / L_LAG));
+    if (qs.has('peak') && p.down) p.F = p.L = 1;   // &peak holds the spikes up (screenshots)
+  }
+  const ready = P.map((p) => p.down && t - p.downAt > READY_S);
+  st = mergeStep(st, ready, ms);
+  const step_ = dt / (rm ? .5 : SLIDE_S);
+  prog = clamp01(prog + Math.min(step_, Math.max(-step_, +st.merged - prog)));
+  const fade = rm ? Math.abs(2 * prog - 1) : 1; // reduced motion: cross-fade between the two layouts, no slide
+
+  const colW = W / 4, RA = Math.min(colW * ASSIGN_R_COL, ASSIGN_R_MAX * u), RS = ROW_R * u, RB = MERGED_R * u;
+  const RW = RB * WINDOW_K, TXO = RS * WINDOW_K + 2.4 * u;   // window radius of the big one; text offset right of a row blob
+  const big = rm ? +(prog > .5) : ease(clamp01((prog - .35) / .65));
+  P.forEach((p, i) => {
+    const m = rm ? +(prog > .5) : ease(clamp01((prog - i * .07) / .79)); // the four leave one after another
+    const cx = colW * (i + .5), bx = cx - 5 * u, x = lerp(cx, bx, m), y = lerp(37 * u, 74 * u, m), Rr = lerp(RA, RS, m);   // assign column centre -> row slot; y in u
+    const top = lerp(13, 62, m) * u, bot = lerp(56, 81, m) * u, cy = Math.min(Math.max(y, top + Rr), bot - Rr), sc = lerp(.6, 1, p.pres);   // sc: body grows with presence
+    UB.set([x * dpr, (H - cy) * dpr, Rr * sc * dpr], i * 3);
+    US.set([rm ? 0 : Math.max(p.F, 0), rm ? 0 : Math.max(p.L, 0), rm ? 0 : p.rip, p.pres], i * 4); ULf[i] = rm ? p.lift : 0; UFl[i] = rm ? 0 : p.fl;
+    const e = els[i], tx = lerp(cx, bx + TXO, m), sh = `translate(${-50 * (1 - m)}%, -50%)`;
+    e.bpm.textContent = ready[i] ? Math.round(p.bpm + Math.sin(t * .4 + i)) : '--';
+    e.bpm.classList.toggle('off', !ready[i]);
+    e.lab.textContent = p.down ? `${p.v} · bpm` : `rest a finger on sensor ${i + 1}`;
+    Object.assign(e.bpm.style, { left: `${tx}px`, top: `${lerp(62, 73, m) * u}px`, fontSize: `${lerp(9, 4.4, m) * u}px`, transform: sh });
+    Object.assign(e.lab.style, { left: `${tx}px`, top: `${lerp(69, 76.8, m) * u}px`, fontSize: `${lerp(2.1, 1.7, m) * u}px`, transform: sh });
+    p.m = m; p.cx = cx;
+  });
+  const Rg = RB * big, cyB = Math.min(Math.max(38 * u, 13 * u + Rg), 62 * u - Rg);   // merged blob centre y, kept inside its band
+  UB.set([W / 2 * dpr, (H - cyB) * dpr, big > .02 ? Rg * dpr : 0], 12);
+  if (prog > .05) dyeStep(dt, big, cyB, Rg, RW);
+  P.forEach((p) => { p.bump = 0; });
+  $('text').style.opacity = fade;
+  const any = P.some((p) => p.down);
+  $('hint').hidden = any;
+  $('status').dataset.state = any ? 'running' : 'idle'; $('status').textContent = any ? 'Playing' : 'Ready';
+  drawFluid(t, fade);
+  overlay(t, fade);
+}
+
+// ---- overlay (traces and lane)
+// simulated music: a 16th-note clock; a voice only plays while its finger is down
+const STEP = 60 / 104 / 4, SPAN = 5, notes = [];
+const BASS = [45, 45, 48, 43], PENTA = [0, 3, 5, 7, 10, 12], CHORDS = [[57, 60, 64], [53, 57, 60], [55, 59, 62], [52, 55, 59]];
+let step = 0;
+function note(t, i, o) { if (!P[i].down) return; notes.push({ t, i, vel: .7, ...o }); P[i].rip = 1; }
+function tick(t) {
+  const n = Math.floor(t / STEP);
+  if (n - step > 8) step = n - 1;
+  while (step < n) {
+    const s = ++step % 32;
+    if (s % 8 === 0) note(t, 0, { drum: 1.4 }); else if (s % 8 === 4) note(t, 0, { drum: 1 }); else if (s % 2 === 0) note(t, 0, { drum: .6, vel: .4 });
+    if (s % 4 === 0) note(t, 1, { lo: BASS[(step >> 3) & 3] });
+    if (s % 2 === 0 && Math.random() < .7) note(t, 2, { lo: 69 + PENTA[Math.floor(Math.random() * 6)] });
+    if (s === 0) { const ch = CHORDS[(step >> 5) & 3]; note(t, 3, { lo: ch[0], hi: ch[2] + 12 }); }
+  }
+  while (notes.length && t - notes[0].t > SPAN) notes.shift();
+}
+const ppg = (ph) => Math.exp(-(((ph - .12) / .06) ** 2)) + .4 * Math.exp(-(((ph - .38) / .1) ** 2)) - .25; // one heartbeat of pulse waveform
+// pulse traces (assign state only) and the notes lane
+function overlay(t, fade) {
+  c.clearRect(0, 0, W, H);
+  c.lineJoin = c.lineCap = 'round';
+  const colW = W / 4, tw = colW * .56, mid = 77 * u, amp = 3.2 * u;
+  P.forEach((p, i) => {
+    const a = p.pres * (1 - p.m) * fade;
+    if (a < .01) return;
+    const x0 = p.cx - tw / 2, g = c.createLinearGradient(x0, 0, x0 + tw, 0);
+    g.addColorStop(0, COLS[i] + '00'); g.addColorStop(.6, COLS[i] + 'b0'); g.addColorStop(1, COLS[i]);
+    c.globalAlpha = a; c.strokeStyle = g; c.lineWidth = Math.max(1.5, .35 * u);
+    c.beginPath();
+    for (let k = 0; k <= 160; k++) {
+      const tt = t - (1 - k / 160) * 4;
+      if (tt < p.downAt) continue;
+      c.lineTo(x0 + (k / 160) * tw, mid - ppg((((tt - p.off) / p.per) % 1 + 1) % 1) * amp);
+    }
+    c.stroke();
+  });
+
+  // lane: last 5 s of notes, newest at the right
+  const ly = 84 * u, lh = 16 * u, x0 = 4 * u, w = W - 8 * u, floor = ly + lh - 2.5 * u;
+  const X = (nt) => x0 + w - ((t - nt) / SPAN) * w, Y = (m) => ly + lh * .78 - clamp01((m - 40) / 68) * lh * .62;
+  c.globalAlpha = 1; c.fillStyle = LINE; c.fillRect(x0, ly - 1.5 * u, w, 1);
+  c.font = `${css('--lab-style')} ${1.7 * u}px ${css('--num')}`; c.fillStyle = MUTED; c.textAlign = 'left'; c.textBaseline = 'middle';
+  c.fillText('what you hear', x0, ly + 1.2 * u);
+  c.strokeStyle = COLS[2]; c.lineWidth = Math.max(1.5, .22 * u); c.globalAlpha = .5; c.beginPath();
+  let px = NaN, py = 0;
+  for (const n of notes) { // lead melody as one soft line
+    if (n.i !== 2) continue;
+    const x = X(n.t), y = Y(n.lo);
+    if (px === px) c.quadraticCurveTo((px + x) / 2, py, x, y); else c.moveTo(x, y);
+    px = x; py = y;
+  }
+  c.stroke();
+  for (const n of notes) {
+    const x = X(n.t), rad = (.45 + .6 * n.vel) * u;
+    c.globalAlpha = 1 - (t - n.t) / SPAN; c.fillStyle = c.strokeStyle = COLS[n.i];
+    c.beginPath();
+    if (n.drum) { c.arc(x, floor, rad * n.drum, 0, 7); c.lineWidth = Math.max(1.5, .22 * u); c.stroke(); }
+    else if (n.hi) { c.globalAlpha *= .7; c.roundRect(x - .7 * u, Y(n.hi), 1.4 * u, Y(n.lo) - Y(n.hi), .7 * u); c.fill(); }
+    else { c.arc(x, Y(n.lo), rad, 0, 7); c.fill(); }
+  }
+  c.globalAlpha = 1;
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
