@@ -15,7 +15,7 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; overflow: hidden; }
-body { background: #1b1b1d; }
+body { font: 400 calc(2 * var(--u)) var(--ui); background: #1b1b1d; }
 main { position: fixed; inset: 0; color: var(--text); overflow: hidden;
   background: radial-gradient(ellipse 75% 70% at 50% 40%, var(--bg2), var(--bg)); }
 main canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
