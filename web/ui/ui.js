@@ -19,8 +19,6 @@ function press(type) {
 $('connect').onclick = () => press('connect');
 $('reconnect').onclick = () => press('connect');
 $('sim').onclick = () => press('simulate');
-document.querySelectorAll('input[name=mode]').forEach((r) =>
-  (r.onchange = () => r.checked && emit('mode', r.value)));
 $('kit').onchange = (e) => emit('kit', e.target.value);
 
 const LINES = {

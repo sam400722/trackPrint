@@ -3,11 +3,10 @@
 // contract/* branch (see docs/superpowers/plans/2026-11-14-trackprint.md).
 //
 // event      from   detail
-// frame      core   { raws: number[4], ch: {finger, ac, beat, bpm}[4] }   ~50 Hz
+// frame      core   { raws: number[4], ch: {finger, ac, beat, bpm, amp, inst}[4] }   ~50 Hz
 // status*    core   'idle' | 'running' | 'disconnected' | 'error: <message>'
 // connect    ui     none. Emit inside the click handler (needs a user gesture).
 // simulate   ui     none. Same rule.
-// mode       ui     'beats' | 'bits'
 // kit        ui     one of the names from 'kits'
 // kits*      audio  string[]
 // analyser*  audio  { wave, fft }, each with .getValue(): Float32Array

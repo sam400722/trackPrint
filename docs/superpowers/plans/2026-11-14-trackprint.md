@@ -63,11 +63,10 @@ Order: Part 0 merges to `main` first. Then A and B run in parallel. Then Part I.
 
 | Event | Emitted by | Detail | Notes |
 |---|---|---|---|
-| `frame` | core | `{ raws: number[4], ch: {finger, ac, beat, bpm}[4] }` | ~50 Hz. `ac` is the pulse waveform (beats point up). `beat` is true on one sample per pulse. `bpm` is 0 until two beats. |
+| `frame` | core | `{ raws: number[4], ch: {finger, ac, beat, bpm, amp, inst}[4] }` | ~50 Hz. `ac` is the pulse waveform (beats point up). `beat` is true on one sample per pulse. `bpm` is 0 until two beats. `amp` is the pulse envelope (pressure). `inst` is the unsmoothed BPM of the latest beat, 0 until two beats. |
 | `status` (sticky) | core | `'idle' \| 'running' \| 'disconnected' \| 'error: <message>'` | |
 | `connect` | ui | none | Emit synchronously inside the click handler. Web Serial and `Tone.start()` both need the user gesture. |
 | `simulate` | ui | none | Same rule. |
-| `mode` | ui | `'beats' \| 'bits'` | |
 | `kit` | ui | a name from `kits` | |
 | `kits` (sticky) | audio | `string[]` | |
 | `analyser` (sticky) | audio | `{ wave, fft }` | Each has `.getValue(): Float32Array`. `wave` is 256 samples in −1…1, `fft` is 64 bins in dB. UI calls only `getValue()`. |

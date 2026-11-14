@@ -32,6 +32,8 @@ import { createChannel } from './signal.js';
   }
   assert.ok(s.finger);
   assert.ok(Math.abs(s.bpm - 72) < 3, `bpm ${s.bpm}`);
+  assert.ok(Math.abs(s.inst - 72) < 8, `inst ${s.inst}`); // unsmoothed, so looser
+  assert.ok(s.amp > 100 && s.amp < 600, `amp ${s.amp}`);  // pulse is +-400
   assert.ok(beats >= 11 && beats <= 13, `beats in last 10 s: ${beats}`); // expect 12
 }
 {
@@ -68,7 +70,7 @@ import { start } from './core.js';
   assert.deepEqual(got.raws, [100000, 0, 0, 0]);
   assert.equal(got.ch.length, 4);
   assert.ok(got.ch[0].finger && !got.ch[1].finger);
-  assert.deepEqual(Object.keys(got.ch[0]).sort(), ['ac', 'beat', 'bpm', 'finger']);
+  assert.deepEqual(Object.keys(got.ch[0]).sort(), ['ac', 'amp', 'beat', 'bpm', 'finger', 'inst']);
   assert.deepEqual(status, ['idle', 'running']);
 }
 {

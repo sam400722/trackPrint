@@ -8,13 +8,13 @@ export function createChannel(rate = 50) {
   const lpA = 0.4;                             // light smoothing against sensor fuzz
   const envDecay = 1 - 1 / (rate * 2);         // envelope forgets over ~2 s
   const refractory = Math.round(rate * 0.3);   // caps at 200 BPM
-  let dc = null, lp = 0, prevAc = 0, env = 0, n = 0, lastBeat = -Infinity, bpm = 0;
+  let dc = null, lp = 0, prevAc = 0, env = 0, n = 0, lastBeat = -Infinity, bpm = 0, inst = 0;
 
   return function step(raw) {
     n++;
     if (raw < FINGER_MIN) {
-      dc = null; env = 0; bpm = 0; prevAc = 0; lastBeat = -Infinity;
-      return { finger: false, ac: 0, beat: false, bpm: 0 };
+      dc = null; env = 0; bpm = 0; inst = 0; prevAc = 0; lastBeat = -Infinity;
+      return { finger: false, ac: 0, beat: false, bpm: 0, amp: 0, inst: 0 };
     }
     if (dc === null) { dc = raw; lp = raw; }
     dc += (raw - dc) * dcA;
@@ -26,11 +26,12 @@ export function createChannel(rate = 50) {
     prevAc = ac;
     if (beat) {
       if (lastBeat !== -Infinity) {
-        const inst = (60 * rate) / (n - lastBeat);
+        inst = (60 * rate) / (n - lastBeat);  // unsmoothed, latest beat only
         bpm = bpm ? bpm * 0.7 + inst * 0.3 : inst;
       }
       lastBeat = n;
     }
-    return { finger: true, ac, beat, bpm };
+    // amp: pulse envelope (finger pressure). inst: BPM of the latest beat, 0 until two beats.
+    return { finger: true, ac, beat, bpm, amp: env, inst };
   };
 }
