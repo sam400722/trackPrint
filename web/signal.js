@@ -10,6 +10,16 @@ export const FINGER_MIN = 50000;
 const WINDOW_S = 1.5;       // must cover one beat: 1.5 s reaches down to 40 BPM
 const MIN_SWING = 60;       // ponytail: raw counts; lower it if a weak finger never beats
 const REARM = 0.1;          // dip this far (of the swing) below the middle before the next beat
+// bpm: the median of the last BPM_BEATS beats (like the SparkFun example's average of
+// recent beats), refined by averaging the beats within 10% of it. A missed or extra beat
+// is far from the median and drops out; averaging the rest avoids the steps that
+// whole-sample beat intervals give a plain median.
+const BPM_BEATS = 5;
+function robustBpm(a) {
+  const m = [...a].sort((x, y) => x - y)[a.length >> 1];
+  const near = a.filter((x) => Math.abs(x - m) <= 0.1 * m);
+  return near.reduce((sum, x) => sum + x, 0) / near.length;
+}
 
 export function createChannel(rate = 50) {
   const dcA = 1 / (rate * 0.5);                // DC tracker, ~0.5 s: lets go of a settling finger fast
@@ -20,12 +30,12 @@ export function createChannel(rate = 50) {
   const warmup = Math.round(rate * 0.5);       // need some wave before the middle means anything
   const win = new Float32Array(N);
   let dc = null, lp = 0, prevAc = 0, env = 0, n = 0, k = 0, armed = true;
-  let lastBeat = -Infinity, bpm = 0, inst = 0;
+  let lastBeat = -Infinity, bpm = 0, inst = 0, recent = [];
 
   return function step(raw) {
     n++;
     if (raw < FINGER_MIN) {
-      dc = null; env = 0; bpm = 0; inst = 0; prevAc = 0; k = 0; armed = true; lastBeat = -Infinity;
+      dc = null; env = 0; bpm = 0; inst = 0; recent = []; prevAc = 0; k = 0; armed = true; lastBeat = -Infinity;
       return { finger: false, ac: 0, beat: false, bpm: 0, amp: 0, inst: 0 };
     }
     if (dc === null) { dc = raw; lp = raw; }
@@ -49,7 +59,8 @@ export function createChannel(rate = 50) {
     if (beat) {
       if (lastBeat !== -Infinity) {
         inst = (60 * rate) / (n - lastBeat);  // unsmoothed, latest beat only
-        bpm = bpm ? bpm * 0.7 + inst * 0.3 : inst;
+        recent = [...recent.slice(1 - BPM_BEATS), inst];
+        bpm = robustBpm(recent);
       }
       lastBeat = n;
     }
