@@ -6,7 +6,7 @@ import { on } from '../bus.js';
 const SPAN = 5000;              // ms of history across the lane
 const LO = 40, HI = 108;        // ponytail: MIDI range mapped to lane height, clamped; today's notes are ~45–103
 const DRUM = new Map([['kick', 1.4], ['snare', 1], ['hat', 0.6]]); // ponytail: ring size per drum; unknown = 1 (medium)
-const DOT = [0.5, 0.7];         // ponytail: dot radius in vh = DOT[0] + DOT[1] * velocity
+const DOT = [0.45, 0.6];        // ponytail: dot radius in vh = DOT[0] + DOT[1] * velocity
 
 export const pitch01 = (m) => Math.min(1, Math.max(0, (m - LO) / (HI - LO)));
 
@@ -38,29 +38,30 @@ let wave = null;
 on('analyser', (a) => { wave = a?.wave ?? null; });
 
 // per-frame geometry, module-level so X/Y aren't new closures every frame
-let x0 = 0, w = 0, top = 0, span = 0, at = 0, capU = 0, capFont = '';
+let x0 = 0, w = 0, ly = 0, lh = 0, at = 0, capU = 0, capFont = '';
 const X = (t) => x0 + w - ((at - t) / SPAN) * w;
-const Y = (m) => (m === m ? top - pitch01(m) * span : top - span / 2); // NaN pitch → middle
+const Y = (m) => ly + lh * (m === m ? .78 - pitch01(m) * .62 : .47); // NaN pitch → middle
 
-// col: { [voice]: hex, other, text, muted, serif }
+// col: { v: {[voice]: hex}, other, lead, text, muted, line, serif }
 export function drawLane(c, r, now, u, dpr, col) {
-  x0 = r.x + 3 * u; w = r.w - 6 * u; top = r.y + r.h * 0.8; span = r.h * 0.7; at = now;
-  const floor = r.y + r.h - 2 * u;
+  x0 = r.x + 4 * u; w = r.w - 8 * u; ly = r.y; lh = r.h; at = now;
+  const floor = ly + lh - 2.5 * u, thin = Math.max(1.5, .22 * u);
   c.save();
   c.lineJoin = c.lineCap = 'round';
+  c.fillStyle = col.line; c.fillRect(x0, ly - 1.5 * u, w, 1); // hairline above the lane
 
   const d = wave?.getValue?.(); // reuses Tone's buffer: no allocation
   if (d?.length > 1) {
-    const mid = r.y + r.h / 2, amp = r.h * 0.45;
+    const mid = ly + lh / 2, amp = lh * 0.45;
     c.beginPath();
     for (let k = 0; k < d.length; k++) c.lineTo(x0 + (k / (d.length - 1)) * w, mid - d[k] * amp);
     c.strokeStyle = col.text;
-    c.globalAlpha = 0.07; c.lineWidth = 1.2 * u; c.stroke(); // soft body of the ribbon
-    c.globalAlpha = 0.2; c.lineWidth = Math.max(1, 0.2 * u); c.stroke();
+    c.globalAlpha = 0.05; c.lineWidth = 1.2 * u; c.stroke(); // soft body of the ribbon
+    c.globalAlpha = 0.14; c.lineWidth = Math.max(1, 0.2 * u); c.stroke();
   }
 
   const n = notes.live(now, SPAN);
-  c.globalAlpha = 0.45; c.strokeStyle = col.lead; c.lineWidth = Math.max(1.5, 0.25 * u);
+  c.globalAlpha = 0.5; c.strokeStyle = col.lead; c.lineWidth = thin;
   c.beginPath(); // lead melody, oldest → newest, soft curve between consecutive notes
   let px = NaN, py = 0;
   for (let k = n - 1; k >= 0; k--) {
@@ -72,28 +73,27 @@ export function drawLane(c, r, now, u, dpr, col) {
   }
   c.stroke();
 
-  c.shadowBlur = 0.8 * u * dpr;
   for (let k = n - 1; k >= 0; k--) {
     const s = notes.at(k), x = X(s.t), hue = col.v[s.voice] ?? col.other, rad = (DOT[0] + DOT[1] * s.vel) * u;
-    c.globalAlpha = 1 - Math.max(0, now - s.t) / SPAN; c.shadowColor = hue;
+    c.globalAlpha = 1 - Math.max(0, now - s.t) / SPAN; c.fillStyle = c.strokeStyle = hue;
     c.beginPath();
     if (s.voice === 'drums') {
       c.arc(x, floor, rad * (DRUM.get(s.drum) ?? 1), 0, 2 * Math.PI);
-      c.strokeStyle = hue; c.lineWidth = Math.max(1.5, 0.25 * u); c.stroke();
+      c.lineWidth = thin; c.stroke();
     } else if (s.voice === 'pad' && s.lo === s.lo) {
-      c.globalAlpha *= 0.6;
-      const y1 = Y(s.hi) - u;
-      c.roundRect(x - 0.8 * u, y1, 1.6 * u, Y(s.lo) + u - y1, 0.8 * u);
-      c.fillStyle = hue; c.fill();
+      c.globalAlpha *= 0.7;
+      const y1 = Y(s.hi);
+      c.roundRect(x - 0.7 * u, y1, 1.4 * u, Math.max(1.4 * u, Y(s.lo) - y1), 0.7 * u);
+      c.fill();
     } else {
       c.arc(x, Y(s.root), rad, 0, 2 * Math.PI);
-      c.fillStyle = hue; c.fill();
+      c.fill();
     }
   }
 
-  if (capU !== u) { capU = u; capFont = `italic ${2.2 * u}px ${col.serif}`; }
-  c.shadowBlur = 0; c.globalAlpha = 1;
+  if (capU !== u) { capU = u; capFont = `italic ${1.7 * u}px ${col.serif}`; }
+  c.globalAlpha = 1;
   c.font = capFont; c.fillStyle = col.muted; c.textAlign = 'left'; c.textBaseline = 'middle';
-  c.fillText('what you hear', x0, r.y + 1.5 * u);
+  c.fillText('what you hear', x0, ly + 1.2 * u);
   c.restore();
 }
