@@ -1,10 +1,16 @@
 // Sound kits. A kit is a spec of voice presets; makeKit turns it into a builder
 // `(out) => Kit` whose instruments connect only to `out`.
-// Kit = { drums, bass, lead, pad, silence(), dispose(), tail }. Each voice is (params, time) => void.
+// Kit = { drums, bass, lead, pad, update(hearts, t), lift(voice), silence(), dispose(), ready, tail }.
+// Each voice is (params, heart, time) => void, where heart is that finger's heart.js state.
 import * as Tone from 'https://cdn.jsdelivr.net/npm/tone@15.0.4/+esm';
 
 const midi = (m) => Tone.Frequency(m, 'midi').toNote();
 const gain = (add, db = 0) => add(new Tone.Gain(Tone.dbToGain(db)));
+
+// Heart rate drives timbre: clamp to 55..110, then map linearly or exponentially.
+const hr01 = (hr) => (Math.min(110, Math.max(55, hr)) - 55) / 55;
+const hrLin = (hr, lo, hi) => lo + (hi - lo) * hr01(hr);
+const hrExp = (hr, lo, hi) => lo * (hi / lo) ** hr01(hr);
 
 // Every voice factory takes ctx = { add, dest, verb } and a preset.
 // `add` registers a node for dispose, `dest` is the kit bus, `verb` the kit reverb.
@@ -96,7 +102,7 @@ function drums(ctx, o) {
 
 const DRUMS = {
   punchy: {
-    level: -4, verb: -18,
+    level: -6, verb: -18,
     kick: { note: 'A1', pitchDecay: 0.05, octaves: 6, decay: 0.45 },
     snare: { freq: 1800, decay: 0.16, body: 'D3' },
     hat: { closed: 0.045, open: 0.3 },
@@ -119,10 +125,12 @@ const DRUMS = {
 };
 
 // ---------------------------------------------------------------- bass
-// type 'mono': MonoSynth with a 24 dB filter envelope; cutoff sets the envelope base.
-// type 'fm':   FMSynth; cutoff sets the modulation index (brighter = growlier).
+// type 'mono': MonoSynth with a 24 dB filter envelope; heart rate sets the envelope base.
+// type 'fm':   FMSynth; heart rate sets the modulation index (faster heart = growlier).
 // type 'soft': plain Synth, long and round.
 // `sub` (dB) layers a sine at the same pitch under the main voice for weight.
+// Heart: pressure drives a distortion (0.4 * press * grit); heart rate sets the filter
+// base (mono, 100..600 Hz) or the modulation index (fm, 1.5..8).
 function bass(ctx, o) {
   const { add } = ctx;
   const bus = gain(add, o.level);
@@ -136,7 +144,7 @@ function bass(ctx, o) {
       envelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.3 },
       modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.3 },
     }));
-    setTone = (c, t) => syn.modulationIndex.setValueAtTime(1 + c / 350, t); // 1.6..8
+    setTone = (hr, t) => syn.modulationIndex.setValueAtTime(hrLin(hr, 1.5, 8), t);
   } else if (o.type === 'soft') {
     syn = add(new Tone.Synth({
       oscillator: { type: o.osc ?? 'triangle' }, portamento: glide,
@@ -149,18 +157,26 @@ function bass(ctx, o) {
       envelope: { attack: 0.005, decay: 0.3, sustain: 0.6, release: 0.25 },
       filterEnvelope: { attack: 0.005, decay: 0.25, sustain: 0.25, release: 0.3, baseFrequency: 150, octaves: o.octaves ?? 2.5 },
     }));
-    setTone = (c) => (syn.filterEnvelope.baseFrequency = 60 + c * 0.3); // 120..795 Hz
+    setTone = (hr) => (syn.filterEnvelope.baseFrequency = hrLin(hr, 100, 600));
   }
-  syn.connect(bus);
+  // At press 0 the distortion is fully dry: Tone's curve at amount 0 isn't unity gain.
+  // Tone's curve squashes a full-level input by ~8 dB, so drive it 10 dB lower and
+  // make up 10 dB after: unity when dry, gentle saturation and similar level when wet.
+  const post = gain(add, 10).connect(bus);
+  const dist = add(new Tone.Distortion({ distortion: 0, wet: 0, oversample: '2x' })).connect(post);
+  syn.connect(gain(add, -10).connect(dist));
   const sub = o.sub == null ? null : add(new Tone.Synth({
     oscillator: { type: 'sine' }, portamento: glide,
     envelope: { attack: 0.005, decay: 0.2, sustain: 0.8, release: 0.25 }, volume: o.sub,
   })).connect(bus);
   const dur = o.dur ?? '8n';
   return {
-    play(p, t) {
+    play(p, heart, t) {
       const n = midi(p.notes[0]);
-      setTone(p.cutoff, t);
+      const grit = 0.4 * heart.press * (o.grit ?? 1);
+      dist.distortion = grit;
+      dist.wet.setValueAtTime(Math.min(1, grit / 0.2), t);
+      setTone(heart.hr, t);
       syn.triggerAttackRelease(n, dur, t, p.velocity);
       sub?.triggerAttackRelease(n, dur, t, 0.5 + 0.5 * p.velocity);
     },
@@ -171,15 +187,16 @@ function bass(ctx, o) {
 const BASS = {
   saw: { type: 'mono', osc: 'sawtooth', glide: 0.03, sub: -8, level: -9 },
   fm: { type: 'fm', harmonicity: 1, glide: 0.02, sub: -10, level: -2 },
-  soft: { type: 'soft', osc: 'triangle', glide: 0.08, dur: '4n', level: -6 },
+  soft: { type: 'soft', osc: 'triangle', glide: 0.08, dur: '4n', level: -6, grit: 0.4 },
 };
 
 // ---------------------------------------------------------------- lead
-// type 'synth': Synth (any oscillator, `spread` makes it a 3-voice fat one) through
-//               a low-pass that follows cutoff.
-// type 'fm':    FMSynth, bell / electric-piano family; cutoff ignored.
-// type 'pluck': PluckSynth; cutoff sets the string dampening. Ignores velocity.
+// type 'synth': Synth (any oscillator, `spread` makes it a 3-voice fat one).
+// type 'fm':    FMSynth, bell / electric-piano family.
+// type 'pluck': PluckSynth. Ignores velocity.
 // Optional `vibrato` {rate, depth} and `delay` {time, feedback, send (dB), pingpong}.
+// Heart: heart rate sets a low-pass before the vibrato, 400..4000 Hz (exponential).
+// Note length is p.duration (the arp step, in seconds) when given, else o.dur.
 function lead(ctx, o) {
   const { add } = ctx;
   const bus = gain(add, o.level);
@@ -192,11 +209,12 @@ function lead(ctx, o) {
   }
   let head = bus;
   if (o.vibrato) head = add(new Tone.Vibrato(o.vibrato.rate, o.vibrato.depth)).connect(head);
+  const lp = add(new Tone.Filter({ type: 'lowpass', frequency: 2000, Q: 1 })).connect(head);
+  head = lp;
   const glide = o.glide ?? 0;
-  let syn, setTone = () => {};
+  let syn;
   if (o.type === 'pluck') {
     syn = add(new Tone.PluckSynth({ attackNoise: 1.5, dampening: 4000, resonance: 0.97, release: 1.5 }));
-    setTone = (c) => (syn.dampening = 1500 + c * 2); // 1.9..6.4 kHz
   } else if (o.type === 'fm') {
     syn = add(new Tone.FMSynth({
       harmonicity: o.harmonicity ?? 3, modulationIndex: o.index ?? 4, portamento: glide,
@@ -204,21 +222,18 @@ function lead(ctx, o) {
       modulationEnvelope: { attack: 0.002, decay: 0.3, sustain: 0, release: 0.4 },
     }));
   } else {
-    const filter = add(new Tone.Filter({ type: 'lowpass', frequency: 3000, Q: 1 })).connect(head);
-    head = filter;
     syn = add(new Tone.Synth({
       oscillator: o.spread ? { type: o.osc, count: 3, spread: o.spread } : { type: o.osc ?? 'square' },
       portamento: glide,
       envelope: { attack: 0.005, decay: 0.2, sustain: 0.4, release: 0.3 },
     }));
-    setTone = (c, t) => filter.frequency.setTargetAtTime(800 + c * 2.5, t, 0.03); // 1.3..6.9 kHz
   }
   syn.connect(head);
   const dur = o.dur ?? '8n';
   return {
-    play(p, t) {
-      setTone(p.cutoff, t);
-      syn.triggerAttackRelease(midi(p.notes[0]), dur, t, p.velocity);
+    play(p, heart, t) {
+      lp.frequency.setTargetAtTime(hrExp(heart.hr, 400, 4000), t, 0.03);
+      syn.triggerAttackRelease(midi(p.notes[0]), p.duration ?? dur, t, p.velocity);
     },
     silence() { syn.triggerRelease(); },
   };
@@ -247,7 +262,9 @@ const LEAD = {
 // ---------------------------------------------------------------- pad
 // PolySynth of type 'synth' (any oscillator; `spread` = 3-voice fat), 'am' or 'fm'.
 // Chain: synth -> 180 Hz high-pass (keeps it off the bass) -> low-pass following
-// cutoff -> optional slow AutoFilter (`motion` Hz), Phaser, Chorus -> bus.
+// heart -> optional slow AutoFilter (`motion` Hz), Phaser, Chorus -> bus.
+// Heart: update() sets the low-pass from heart rate, 300..3000 Hz (exponential),
+// times 2^breath (+-1 octave with the player's breathing). Called every 16th step.
 function pad(ctx, o) {
   const { add } = ctx;
   const bus = gain(add, o.level);
@@ -277,9 +294,11 @@ function pad(ctx, o) {
   add(syn).connect(hp);
   syn.maxPolyphony = 16;
   return {
-    play(p, t) {
-      lp.frequency.rampTo(400 + p.cutoff * 1.2, 2, t); // 640..3340 Hz, glides between chords
+    play(p, heart, t) {
       syn.triggerAttackRelease(p.notes.map(midi), o.hold ?? 2.5, t, 0.3 + 0.5 * p.velocity);
+    },
+    update(heart, t) {
+      lp.frequency.rampTo(hrExp(heart.hr, 300, 3000) * 2 ** heart.breath, 0.1, t);
     },
     silence() { syn.releaseAll(); },
   };
@@ -316,10 +335,12 @@ function makeKit(spec) {
     const l = lead(ctx, spec.lead);
     const p = pad(ctx, spec.pad);
     return {
-      drums: d,
+      drums: (params, heart, t) => d(params, t),
       bass: b.play,
       lead: l.play,
       pad: p.play,
+      update(hearts, t) { p.update(hearts.pad, t); },  // continuous, every 16th step
+      lift(voice) { if (voice === 'pad') p.silence(); }, // finger lifted: pad releases now
       silence() { b.silence(); l.silence(); p.silence(); },
       dispose() { nodes.forEach((n) => n.dispose()); },
       ready: verb.ready, // resolves once the reverb impulse is generated
