@@ -113,6 +113,47 @@ import { createChannel } from './signal.js';
   assert.ok(shift[at].held && shift[at + 4].held && !shift[at + 5].held && !shift[at + 6].held, 'big shift passes after HOLD');
   assert.ok(shift.slice(at + 50 * 4).some((s) => s.beat) && Math.abs(shift.at(-1).bpm - 72) < 3, `beats after shift, bpm ${shift.at(-1).bpm}`);
 }
+{
+  // Quality filter, on real recordings: 30 s each from the four bare sensors, one finger held on
+  // (testdata/bare-sensors.json, IR only). Touches 2 and 4 are clean, 1 and 3 are shaky. The heart
+  // was at 75-80 throughout. Before the filter the BPM shown ranged 53-107, 68-154, 34-107 and 67-97.
+  const { readFileSync } = await import('node:fs');
+  const bare = JSON.parse(readFileSync(new URL('./testdata/bare-sensors.json', import.meta.url)));
+  const shown = (raws, from) => { const ch = createChannel(50); return raws.map((r) => ch(r).bpm).slice(50 * from); };
+  const within = (name, from, lo, hi) => {
+    const b = shown(bare[name], from), min = Math.min(...b), max = Math.max(...b);
+    assert.ok(min >= lo && max <= hi, `${name}: bpm ${min.toFixed(0)}-${max.toFixed(0)} after ${from} s, want ${lo}-${hi}`);
+  };
+  within('touch2-sensor1', 8, 74, 85);   // clean
+  within('touch4-sensor2', 5, 68, 80);   // clean
+  within('touch3-sensor3', 5, 70, 84);   // shaky: was reading 48
+  within('touch1-sensor4', 4, 65, 95);   // too shaky to lock: the fallback, steadier than before
+  for (const name in bare) assert.ok(shown(bare[name], 0)[50 * 5] > 0, `${name}: a BPM within 5 s`);
+
+  // Synthetic: a locked 72 BPM pulse, then 6 s of shaking far larger than the pulse. The BPM holds.
+  let seed = 3;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5;
+  let wob = 0;
+  const ch = createChannel(50), out = [];
+  for (let i = 0; i < 50 * 30; i++) {
+    const shake = i >= 50 * 14 && i < 50 * 20;
+    wob = shake ? wob * 0.9 + rnd() * 1500 : wob * 0.9;   // smoothed noise: lands in the pulse band
+    out.push(ch(Math.round(100000 - 400 * Math.sin((2 * Math.PI * 1.2 * i) / 50) + rnd() * 100 + wob)).bpm);
+  }
+  const during = out.slice(50 * 14, 50 * 22), after = out.at(-1);
+  assert.ok(during.every((b) => Math.abs(b - 72) < 4), `bpm held through a shake: ${Math.min(...during).toFixed(1)}-${Math.max(...during).toFixed(1)}`);
+  assert.ok(Math.abs(after - 72) < 2, `bpm after the shake: ${after}`);
+
+  // A heart that really changes rate is followed: 66 -> 96 BPM in one step takes over within 10 s.
+  const ch2 = createChannel(50);
+  let ph = 0, b2 = 0;
+  for (let i = 0; i < 50 * 30; i++) {
+    ph += (2 * Math.PI * (i < 50 * 15 ? 1.1 : 1.6)) / 50;
+    b2 = ch2(Math.round(100000 - 400 * Math.sin(ph) + rnd() * 100)).bpm;
+    if (i === 50 * 15 - 1) assert.ok(Math.abs(b2 - 66) < 2, `locked at 66: ${b2}`);
+    if (i === 50 * 25) assert.ok(Math.abs(b2 - 96) < 3, `followed to 96: ${b2}`);
+  }
+}
 console.log('signal ok');
 
 import { fields, note } from './audio/mapping.js';
@@ -291,7 +332,7 @@ console.log('dynamics ok');
   for (let i = 0; i < 50 * 20; i++) { f([60000, 70000, 80000, 0]); bpm = chan(out.at(-1)[3]).bpm; }
   assert.ok(bpm > 50 && bpm < 66, `sim pad bpm ${bpm}`);
 }
-assert.deepEqual(simSensors(''), [3]);            // sensor 4 is broken for now: simulated by default
+assert.deepEqual(simSensors(''), []);             // no broken sensors: nothing is simulated by default
 assert.deepEqual(simSensors('?sim=none'), []);
 assert.deepEqual(simSensors('?sim=2,4,9'), [1, 3]);
 console.log('simChannels ok');
