@@ -123,3 +123,20 @@ import { start } from './core.js';
   assert.deepEqual(log.filter((x) => x.startsWith('error')), []);
 }
 console.log('contract ok');
+
+import { ring, pitch01 } from './ui/lane.js';
+
+{
+  assert.equal(pitch01(0), 0);                 // clamped low
+  assert.equal(pitch01(200), 1);               // clamped high
+  assert.ok(pitch01(60) > 0 && pitch01(60) < pitch01(72) && pitch01(72) < 1);
+  const r = ring(4);
+  for (let i = 1; i <= 6; i++) r.add(i * 1000).v = i; // 6 into 4 slots: oldest two overwritten
+  assert.equal(r.live(6000, 1e9), 4);
+  assert.deepEqual([0, 1, 2, 3].map((k) => r.at(k).v), [6, 5, 4, 3]); // newest first
+  assert.equal(r.live(7000, 2500), 2);         // 6000 and 5000 are within 2.5 s
+  assert.equal(r.live(7000, 1e9), 2);          // pruned for good
+  r.add(8000);
+  assert.equal(r.live(8000, 1e9), 3);
+}
+console.log('lane ok');

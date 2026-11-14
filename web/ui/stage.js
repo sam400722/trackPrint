@@ -1,6 +1,7 @@
 // The stage canvas: one requestAnimationFrame loop draws everything on it.
-// B3: voice panels in the stage rect. B4: notes lane in the lane rect (same loop).
+// B3: voice panels in the stage rect. B4: drum ripples + pad wash here, notes lane in lane.js.
 import { on, VOICES } from '../bus.js';
+import { drawLane } from './lane.js';
 
 const N = 200;          // ring buffer: ~4 s of frames at 50 Hz
 const STALE_MS = 500;   // no frame for this long = treat every channel as no finger
@@ -9,6 +10,9 @@ const SWELL = 0.2;      // ponytail: blob grows ~20% on a beat
 const LEVEL_TAU = 0.2;  // ponytail: seconds, smoothing of |ac| that drives blob radius
 const GLOW = 2.5;       // ponytail: blob glow in vh, at rest
 const FLARE = 4;        // ponytail: extra glow in vh at the peak of a beat
+const RIPPLE_MS = 1200; // ponytail: drum ripple life
+const RIPPLE = 1.5;     // ponytail: ripple grows to R * (1 + RIPPLE * velocity)
+const WASH_MS = 7000;   // ponytail: pad wash fade
 
 const cv = document.getElementById('stage');
 const c = cv.getContext('2d');
@@ -26,6 +30,24 @@ const P = VOICES.map((v, i) => {
   fill.addColorStop(1, rgba(col, 0.12));
   return { col, fill, dash: rgba(col, 0.45), trace: null, on: `${v} · bpm`, off: `rest a finger on sensor ${i + 1}`,
     buf: new Float32Array(N), head: 0, count: 0, max: 1, last: 0, level: 0, beatAt: -1e9 };
+});
+const COL = { other: tok('--other'), text: TEXT, muted: MUTED, serif: SERIF }; // lane colours
+VOICES.forEach((v, i) => { COL[v] = P[i].col; });
+
+// music: drum ripples (pool, reused) and the pad wash
+const DI = VOICES.indexOf('drums');
+const RIP = Array.from({ length: 8 }, () => ({ t: -1e9, vel: 0 })); // ponytail: 8 live ripples is plenty at 16th-note drums
+let ripHead = 0;
+on('note', (n) => {
+  if (n.voice === 'drums') {
+    const r = RIP[ripHead = (ripHead + 1) % RIP.length];
+    r.t = performance.now(); r.vel = typeof n.velocity === 'number' ? n.velocity : 0.7;
+  } else if (n.voice === 'pad') {
+    // full-screen wash: body::before in style.css (behind header and canvas), faded by the compositor
+    const root = Array.isArray(n.notes) ? n.notes[0] : NaN, k = Number.isFinite(root) ? (((root % 12) + 12) % 12) % 3 : 0;
+    document.body.style.setProperty('--wash', `var(--wash-${k + 1})`); // hue from the root's pitch class: same chord, same hue
+    document.body.animate({ opacity: [1, 0] }, { duration: WASH_MS, pseudoElement: '::before' });
+  }
 });
 
 // frames only update state; drawing happens in the loop
@@ -93,8 +115,8 @@ function drawPanels(now, dt, live) {
   const t = now / 1000, colW = stage.w / VOICES.length, ease = 1 - Math.exp(-dt / LEVEL_TAU);
   c.textAlign = 'center'; c.textBaseline = 'middle';
   for (let i = 0; i < P.length; i++) {
-    const p = P[i], ch = live ? frame.ch?.[i] : null, on = !!ch?.finger, cx = stage.x + colW * (i + 0.5);
-    if (on) {
+    const p = P[i], ch = live ? frame.ch?.[i] : null, touching = !!ch?.finger, cx = stage.x + colW * (i + 0.5);
+    if (touching) {
       const kick = Math.min(1, Math.max(0, 1 - (now - p.beatAt) / BEAT_MS)) ** 2;
       p.level += (Math.abs(p.last) / p.max - p.level) * ease;
       const r = R * (0.85 + 0.15 * p.level + SWELL * kick);
@@ -110,12 +132,12 @@ function drawPanels(now, dt, live) {
       c.setLineDash(DASH); c.strokeStyle = p.dash; c.lineWidth = Math.max(1.5, 0.2 * u); c.stroke(); c.setLineDash(SOLID);
     }
 
-    c.font = bpmFont; c.fillStyle = on ? TEXT : DIM;
-    c.fillText(on && ch.bpm > 0 ? String(Math.round(ch.bpm)) : '--', cx, bpmY);
-    c.font = labelFont; c.fillStyle = on ? p.col : MUTED;
-    c.fillText(on ? p.on : p.off, cx, labelY);
+    c.font = bpmFont; c.fillStyle = touching ? TEXT : DIM;
+    c.fillText(touching && ch.bpm > 0 ? String(Math.round(ch.bpm)) : '--', cx, bpmY);
+    c.font = labelFont; c.fillStyle = touching ? p.col : MUTED;
+    c.fillText(touching ? p.on : p.off, cx, labelY);
 
-    if (on && p.count > 1) { // newest sample at the right edge, scaled by this channel's own max
+    if (touching && p.count > 1) { // newest sample at the right edge, scaled by this channel's own max
       const x1 = cx + traceW / 2, mid = traceY + traceH / 2;
       c.save();
       c.strokeStyle = p.trace; c.lineWidth = Math.max(1.5, 0.45 * u); c.lineJoin = c.lineCap = 'round';
@@ -130,6 +152,18 @@ function drawPanels(now, dt, live) {
   }
 }
 
+function drawRipples(now) {
+  const cx = stage.x + (stage.w / VOICES.length) * (DI + 0.5);
+  c.strokeStyle = P[DI].col; c.lineWidth = Math.max(1.5, 0.25 * u);
+  for (let i = 0; i < RIP.length; i++) {
+    const r = RIP[i], a = (now - r.t) / RIPPLE_MS;
+    if (a >= 1) continue;
+    c.globalAlpha = (1 - a) * 0.7;
+    c.beginPath(); c.arc(cx, cy, R * (1 + a * RIPPLE * r.vel), 0, 2 * Math.PI); c.stroke();
+  }
+  c.globalAlpha = 1;
+}
+
 let prev = 0;
 function loop(now) {
   const dt = Math.min(0.1, (now - prev) / 1000); prev = now; // time-based, so 60 Hz and 120 Hz look alike
@@ -137,6 +171,8 @@ function loop(now) {
   if (W) {
     c.clearRect(0, 0, W, H);
     drawPanels(now, dt, frame && now - frameAt < STALE_MS);
+    if (DI >= 0) drawRipples(now);
+    drawLane(c, lane, now, u, dpr, COL);
   }
   requestAnimationFrame(loop);
 }
