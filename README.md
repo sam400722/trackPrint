@@ -111,7 +111,7 @@ Not all four sensors wired yet? Open http://localhost:8000/?fill=sim and use **C
 
 **Save log / analyze.** **Save log** downloads a CSV of every reading since connecting. Replay it through the real beat detector with `node tools/analyze-log.mjs ~/Downloads/flatline-log-*.csv`.
 
-**Broken sensor.** Sensor 4 doesn't work right now, so the app simulates it by default (`BROKEN_SENSORS` in `web/serial.js`; set it to `[]` once it's fixed). A simulated sensor plays a heartbeat whenever every working sensor has a finger on it, so the four can still merge. `?sim=3,4` picks other sensors to simulate; `?sim=none` simulates nothing. Logs note which sensors were simulated and the analyzer skips them.
+**Broken sensor.** All four sensors are read by default. If one stops working, the app can simulate it: open `?sim=4` (or `?sim=3,4`) for one visit, or list it in `BROKEN_SENSORS` in `web/serial.js` to make that the default. A simulated sensor plays a heartbeat whenever every working sensor has a finger on it, so the four can still merge. Logs note which sensors were simulated and the analyzer skips them.
 
 ## Testing with one sensor (legacy Arduino)
 `firmware/trackprint_single` is for testing with a single MAX30102 wired straight to the Uno, without the mux: SDA → A4, SCL → A5, VIN → 3.3V, GND → GND. It sends the same `ir0,ir1,ir2,ir3` lines as the full firmware. The real reading goes on `CHANNEL` (default 0, drums, so your finger sets the tempo) and the other channels send `0`.
