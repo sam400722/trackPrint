@@ -7,18 +7,21 @@
   <link rel="stylesheet" href="ui/style.css">
 </head>
 <body>
-  <h1>trackPrint</h1>
-  <button id="connect">Connect sensors</button>
-  <button id="sim">Simulate</button>
-  <label>Mode
-    <select id="mode">
-      <option value="beats">beats trigger</option>
-      <option value="bits">bits only</option>
-    </select>
-  </label>
-  <label>Kit <select id="kit"></select></label>
-  <p id="status"></p>
-  <div id="meters"></div>
+  <header>
+    <h1>trackPrint</h1>
+    <div class="controls">
+      <button id="connect" type="button">Connect sensors</button>
+      <button id="sim" type="button">Simulate</button>
+      <fieldset id="mode" class="seg">
+        <legend>Mode</legend>
+        <label><input type="radio" name="mode" value="beats" checked><span>beats</span></label>
+        <label><input type="radio" name="mode" value="bits"><span>bits</span></label>
+      </fieldset>
+      <label class="kit">Kit <select id="kit"></select></label>
+      <p id="status" data-state="idle" role="status"></p>
+    </div>
+  </header>
+  <main><canvas id="stage"></canvas></main>
   <script type="module" src="main.js"></script>
 </body>
 </html>
