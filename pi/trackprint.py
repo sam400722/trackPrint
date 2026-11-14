@@ -8,6 +8,7 @@ format the old Arduino sketch sent, so the web app doesn't change.
 Usage: trackprint.py [OUT]   OUT defaults to /dev/ttyGS0 (USB gadget serial);
                              pass - to print to stdout for testing over ssh.
 """
+import collections
 import os
 import sys
 import termios
@@ -19,7 +20,8 @@ from smbus2 import SMBus, i2c_msg
 
 BUSES = [1, 3, 4, 5]  # sensor 0..3 -> /dev/i2c-N (see README wiring)
 ADDR = 0x57
-PERIOD = 0.02         # 50 Hz
+PERIOD = 0.02         # 50 Hz output
+POLL = 0.01           # FIFO poll period: twice the sample rate, so a new sample is never left waiting long
 RETRY = 2.0           # seconds between attempts to (re)open a missing sensor
 
 # MAX30102 registers
@@ -31,7 +33,7 @@ LED1_PA, LED2_PA, PART_ID = 0x0C, 0x0D, 0xFF
 # ponytail: LED power is the calibration knob; raise it if signal is weak, lower it if raw IR saturates near 262143
 LED_POWER = 0x1F
 FIFO_CFG = 0b010 << 5 | 1 << 4  # average 4 samples, FIFO rollover on
-SPO2_CFG = 0b01 << 5 | 0b001 << 2 | 0b11  # 4096 nA range, 200 sps, 411 us pulse
+SPO2_CFG = 0b01 << 5 | 0b010 << 2 | 0b11  # 4096 nA range, 200 sps (SR bits 010; 001 is 100 sps), 411 us pulse
 MODE_SPO2 = 0x03  # red + IR
 
 
@@ -40,6 +42,7 @@ class Sensor:
         self.bus_num = bus_num
         self.bus = None
         self.ir = 0
+        self.q = collections.deque()  # samples read but not yet sent (append/popleft are thread-safe)
         self.up = False
         self.next_try = 0.0
 
@@ -74,34 +77,58 @@ class Sensor:
             self.bus.close()
         self.bus = None
         self.up = False
+        self.q.clear()
         self.ir = 0
         self.next_try = time.monotonic() + RETRY
 
     def poll(self):
-        """Drain the FIFO, keep the newest IR sample."""
+        """Drain the FIFO into the queue, one IR value per sample."""
         if not self.bus:
             if time.monotonic() >= self.next_try:
                 self.open()
             return
         try:
             b = self.bus
-            wr = b.read_byte_data(ADDR, FIFO_WR_PTR)
-            rd = b.read_byte_data(ADDR, FIFO_RD_PTR)
+            # WR_PTR, OVF_COUNTER, RD_PTR are consecutive registers: one transaction, not two
+            wr, _, rd = b.read_i2c_block_data(ADDR, FIFO_WR_PTR, 3)
             n = (wr - rd) & 0x1F
             if not n:
                 return
             msg = i2c_msg.read(ADDR, n * 6)  # each sample: red (3 bytes), IR (3 bytes)
             b.i2c_rdwr(i2c_msg.write(ADDR, [FIFO_DATA]), msg)
-            d = bytes(msg)[-3:]
-            self.ir = (d[0] << 16 | d[1] << 8 | d[2]) & 0x3FFFF
+            d = bytes(msg)
+            for i in range(3, len(d), 6):
+                self.q.append((d[i] << 16 | d[i + 1] << 8 | d[i + 2]) & 0x3FFFF)
         except OSError as e:  # unplugged or bus glitch: retry later
             self.drop(e)
 
+    def take(self):
+        """Next sample for the output line. The queue absorbs timing jitter between the sensor's
+        clock and ours: a sample that lands just after a line went out waits for the next line
+        instead of being skipped. Empty queue repeats the last value; a backlog drops one sample."""
+        q = self.q
+        if q:
+            self.ir = q.popleft()
+            if len(q) > 2:  # sensor clock runs ahead of ours: skip one to bound the delay
+                q.popleft()
+        return self.ir
+
     def run(self):
         # One thread per sensor, so a slow or dead bus can't stall the 50 Hz output.
+        # Polls land on a fixed schedule (not "sleep after each read", which drifts slower than the sensor).
+        nxt = time.monotonic()
         while True:
             self.poll()
-            time.sleep(PERIOD if self.bus else max(0.0, self.next_try - time.monotonic()))
+            if not self.bus:
+                time.sleep(max(0.0, self.next_try - time.monotonic()))
+                nxt = time.monotonic()
+                continue
+            nxt += POLL
+            delay = nxt - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                nxt = time.monotonic()  # fell behind; don't burst to catch up
 
 
 def log(s):
@@ -141,7 +168,7 @@ def main():
         threading.Thread(target=s.run, daemon=True).start()
     nxt = time.monotonic()
     while True:
-        out.write(','.join(str(s.ir) for s in sensors) + '\n')
+        out.write(','.join(str(s.take()) for s in sensors) + '\n')
         nxt += PERIOD
         delay = nxt - time.monotonic()
         if delay > 0:
