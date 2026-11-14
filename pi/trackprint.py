@@ -7,9 +7,14 @@ format the old Arduino sketch sent, so the web app doesn't change.
 
 Usage: trackprint.py [OUT]   OUT defaults to /dev/ttyGS0 (USB gadget serial);
                              pass - to print to stdout for testing over ssh.
+
+Tuning without a restart (as the service's user, no sudo):
+  echo led=0x3F > ~/trackprint.conf && pkill -HUP -f trackprint.py    # change LED power, kept across restarts
+  pkill -USR1 -f trackprint.py    # write the last 30 s of red and IR, per sensor, to /tmp/trackprint-dump.csv
 """
 import collections
 import os
+import signal
 import sys
 import termios
 import threading
@@ -32,6 +37,11 @@ LED1_PA, LED2_PA, PART_ID = 0x0C, 0x0D, 0xFF
 # Same settings as the old sketch's setup(0x1F, 4, 2, 200, 411, 4096).
 # ponytail: LED power is the calibration knob; raise it if signal is weak, lower it if raw IR saturates near 262143
 LED_POWER = 0x1F
+CONF = os.path.expanduser('~/trackprint.conf')  # optional: a line `led=0x3F` overrides LED_POWER
+DUMP = '/tmp/trackprint-dump.csv'
+HIST = 1500           # samples of (red, IR) kept per sensor for the dump: 30 s
+LED_MAX = 0x7F        # cap for the override: 25 mA, half of what the chip allows (0xFF = 51 mA)
+led = LED_POWER       # current LED power; sensor threads apply a change on their next poll
 FIFO_CFG = 0b010 << 5 | 1 << 4  # average 4 samples, FIFO rollover on
 SPO2_CFG = 0b01 << 5 | 0b010 << 2 | 0b11  # 4096 nA range, 200 sps (SR bits 010; 001 is 100 sps), 411 us pulse
 MODE_SPO2 = 0x03  # red + IR
@@ -43,6 +53,8 @@ class Sensor:
         self.bus = None
         self.ir = 0
         self.q = collections.deque()  # samples read but not yet sent (append/popleft are thread-safe)
+        self.hist = collections.deque(maxlen=HIST)  # recent (red, IR), for the dump
+        self.led = None               # LED power last written to this sensor
         self.up = False
         self.next_try = 0.0
 
@@ -61,14 +73,18 @@ class Sensor:
             b.write_byte_data(ADDR, FIFO_CONFIG, FIFO_CFG)
             b.write_byte_data(ADDR, MODE_CONFIG, MODE_SPO2)
             b.write_byte_data(ADDR, SPO2_CONFIG, SPO2_CFG)
-            b.write_byte_data(ADDR, LED1_PA, LED_POWER)
-            b.write_byte_data(ADDR, LED2_PA, LED_POWER)
+            self.set_led()
             for reg in (FIFO_WR_PTR, OVF_COUNTER, FIFO_RD_PTR):
                 b.write_byte_data(ADDR, reg, 0)
             self.up = True
             log(f'sensor on i2c-{self.bus_num} ready')
         except OSError as e:
             self.drop(e)
+
+    def set_led(self):
+        self.bus.write_byte_data(ADDR, LED1_PA, led)  # LED1 = red
+        self.bus.write_byte_data(ADDR, LED2_PA, led)  # LED2 = IR
+        self.led = led
 
     def drop(self, err):
         if self.up:  # only log transitions, not every retry of an absent sensor
@@ -89,6 +105,8 @@ class Sensor:
             return
         try:
             b = self.bus
+            if self.led != led:
+                self.set_led()
             # WR_PTR, OVF_COUNTER, RD_PTR are consecutive registers: one transaction, not two
             wr, _, rd = b.read_i2c_block_data(ADDR, FIFO_WR_PTR, 3)
             n = (wr - rd) & 0x1F
@@ -97,8 +115,11 @@ class Sensor:
             msg = i2c_msg.read(ADDR, n * 6)  # each sample: red (3 bytes), IR (3 bytes)
             b.i2c_rdwr(i2c_msg.write(ADDR, [FIFO_DATA]), msg)
             d = bytes(msg)
-            for i in range(3, len(d), 6):
-                self.q.append((d[i] << 16 | d[i + 1] << 8 | d[i + 2]) & 0x3FFFF)
+            for i in range(0, len(d), 6):
+                red = (d[i] << 16 | d[i + 1] << 8 | d[i + 2]) & 0x3FFFF
+                ir = (d[i + 3] << 16 | d[i + 4] << 8 | d[i + 5]) & 0x3FFFF
+                self.q.append(ir)
+                self.hist.append((red, ir))
         except OSError as e:  # unplugged or bus glitch: retry later
             self.drop(e)
 
@@ -135,6 +156,30 @@ def log(s):
     print(s, file=sys.stderr, flush=True)
 
 
+def load_conf(*_):
+    """Read LED power from CONF, if it exists. Also the SIGHUP handler."""
+    global led
+    try:
+        for line in open(CONF):
+            k, _, v = line.partition('=')
+            if k.strip() == 'led':
+                led = max(0, min(LED_MAX, int(v.strip(), 0)))
+                log(f'LED power {led:#04x}')
+    except (OSError, ValueError):
+        pass
+
+
+def dump(sensors):
+    """Write each sensor's recent (red, IR) samples, newest last. Columns: red1,ir1,...,red4,ir4."""
+    hist = [list(s.hist) for s in sensors]
+    n = max(len(h) for h in hist)
+    with open(DUMP + '.tmp', 'w') as f:
+        f.write(f'# led={led:#04x}\n')
+        for i in range(n):
+            f.write(','.join('%d,%d' % h[i - n + len(h)] if i - n + len(h) >= 0 else ',' for h in hist) + '\n')
+    os.replace(DUMP + '.tmp', DUMP)
+
+
 class Out:
     """Line sink. Drops lines while nothing is listening instead of blocking."""
 
@@ -163,7 +208,10 @@ class Out:
 
 def main():
     out = Out(sys.argv[1] if len(sys.argv) > 1 else '/dev/ttyGS0')
+    load_conf()
     sensors = [Sensor(n) for n in BUSES]
+    signal.signal(signal.SIGHUP, load_conf)
+    signal.signal(signal.SIGUSR1, lambda *_: dump(sensors))
     for s in sensors:
         threading.Thread(target=s.run, daemon=True).start()
     nxt = time.monotonic()
