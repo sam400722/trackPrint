@@ -245,11 +245,12 @@ inputs: maintain Task 1's onset ceilings and note bounds.
 Executed by Task 5 on 2026-11-14 from the actual checkout
 `/Users/sasha/Documents/trackPrint` on branch `sound-genre-evolution`.
 
-- [x] **Step 1 (serve/check UI):** Started `python3 -m http.server 8001 --bind
-  127.0.0.1` from `web`; `curl http://127.0.0.1:8001/` returned the actual
-  checkout HTML successfully. No Chrome, Chromium, Edge, or other browser
-  executable is available in this environment, so the Simulate gesture, dropdown,
-  and browser-console checks could not be performed.
+- [ ] **Step 1 (server/browser check):** Started `python3 -m http.server 8001
+  --bind 127.0.0.1` from `web`; `curl http://127.0.0.1:8001/` returned the
+  actual checkout HTML successfully. Browser verification remains incomplete:
+  no Chrome, Chromium, Edge, or other browser executable is available in this
+  environment, so the Simulate gesture, dropdown, and browser-console checks
+  could not be performed.
 - [ ] **Step 2 (listening):** Not executed. No browser audio runtime or audio
   hardware is available; no audible listening is claimed. Genre phrases,
   house pumping, garage swing, ambient spacing, and hardbass donk remain owner
