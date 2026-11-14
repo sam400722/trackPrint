@@ -28,7 +28,7 @@ export function mapVoice(name, raw) {
   const cutoff = 200 + d * 150;
   switch (name) {
     case 'drums': return { drum: DRUMS[a], velocity };
-    case 'bass':  return { notes: [note(a, 0)], velocity, cutoff };
+    case 'bass':  return { notes: [note(a, -1)], velocity, cutoff }; // A1..D3, under the pad
     case 'lead':  return { notes: [note(a + b, 2)], velocity, cutoff };
     case 'pad':   return { notes: [note(a, 1), note(a + 2, 1), note(a + 4, 1)], velocity, cutoff };
   }

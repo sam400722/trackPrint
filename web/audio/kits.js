@@ -104,17 +104,60 @@ const DRUMS = {
 };
 
 // ---------------------------------------------------------------- bass
+// type 'mono': MonoSynth with a 24 dB filter envelope; cutoff sets the envelope base.
+// type 'fm':   FMSynth; cutoff sets the modulation index (brighter = growlier).
+// type 'soft': plain Synth, long and round.
+// `sub` (dB) layers a sine at the same pitch under the main voice for weight.
 function bass(ctx, o) {
-  const syn = ctx.add(new Tone.MonoSynth({ oscillator: { type: o.osc ?? 'sawtooth' }, volume: o.level }));
-  sends(ctx, syn, o);
+  const { add } = ctx;
+  const bus = gain(add, o.level);
+  sends(ctx, bus, o);
+  const glide = o.glide ?? 0;
+  let syn, setTone = () => {};
+  if (o.type === 'fm') {
+    syn = add(new Tone.FMSynth({
+      harmonicity: o.harmonicity ?? 1, modulationIndex: 4, portamento: glide,
+      modulation: { type: o.mod ?? 'square' },
+      envelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.3 },
+      modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.3 },
+    }));
+    setTone = (c, t) => syn.modulationIndex.setValueAtTime(1 + c / 350, t); // 1.6..8
+  } else if (o.type === 'soft') {
+    syn = add(new Tone.Synth({
+      oscillator: { type: o.osc ?? 'triangle' }, portamento: glide,
+      envelope: { attack: 0.03, decay: 0.6, sustain: 0.6, release: 1.2 },
+    }));
+  } else {
+    syn = add(new Tone.MonoSynth({
+      oscillator: { type: o.osc ?? 'sawtooth' }, portamento: glide,
+      filter: { type: 'lowpass', Q: o.q ?? 2, rolloff: -24 },
+      envelope: { attack: 0.005, decay: 0.3, sustain: 0.6, release: 0.25 },
+      filterEnvelope: { attack: 0.005, decay: 0.25, sustain: 0.25, release: 0.3, baseFrequency: 150, octaves: o.octaves ?? 2.5 },
+    }));
+    setTone = (c) => (syn.filterEnvelope.baseFrequency = 60 + c * 0.3); // 120..795 Hz
+  }
+  syn.connect(bus);
+  const sub = o.sub == null ? null : add(new Tone.Synth({
+    oscillator: { type: 'sine' }, portamento: glide,
+    envelope: { attack: 0.005, decay: 0.2, sustain: 0.8, release: 0.25 }, volume: o.sub,
+  })).connect(bus);
+  const dur = o.dur ?? '8n';
   return {
     play(p, t) {
-      syn.filterEnvelope.baseFrequency = p.cutoff;
-      syn.triggerAttackRelease(midi(p.notes[0]), '8n', t, p.velocity);
+      const n = midi(p.notes[0]);
+      setTone(p.cutoff, t);
+      syn.triggerAttackRelease(n, dur, t, p.velocity);
+      sub?.triggerAttackRelease(n, dur, t, 0.5 + 0.5 * p.velocity);
     },
-    silence() { syn.triggerRelease(); },
+    silence() { syn.triggerRelease(); sub?.triggerRelease(); },
   };
 }
+
+const BASS = {
+  saw: { type: 'mono', osc: 'sawtooth', glide: 0.03, sub: -8, level: -8 },
+  fm: { type: 'fm', harmonicity: 1, glide: 0.02, sub: -10, level: -8 },
+  soft: { type: 'soft', osc: 'triangle', glide: 0.08, dur: '4n', level: -6 },
+};
 
 // ---------------------------------------------------------------- lead
 function lead(ctx, o) {
@@ -172,7 +215,7 @@ const BASIC = {
   tail: 3,
   reverb: { decay: 3, wet: 1 },
   drums: DRUMS.punchy,
-  bass: { level: -6 },
+  bass: BASS.saw,
   lead: { level: -14, verb: -6 },
   pad: { level: -20, verb: -3 },
 };
@@ -182,7 +225,7 @@ export const KITS = {
   // Temporary A/B kit; removed in A7.
   test: makeKit({
     ...BASIC,
-    bass: { ...BASIC.bass, osc: 'sine' },
+    bass: BASS.fm,
     lead: { ...BASIC.lead, osc: 'triangle' },
     pad: { ...BASIC.pad, osc: 'fattriangle' },
   }),
