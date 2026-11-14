@@ -1,4 +1,5 @@
 // Frame sources. Each calls onFrame([ir0, ir1, ir2, ir3]) ~50x/s.
+import { FINGER_MIN } from './signal.js';
 
 export function parseLine(line) {
   const t = line.trim();
@@ -43,6 +44,7 @@ export async function connectSerial(onFrame, onClose) {
 // The drum finger lands after 10 s (tests the no-drum default and the tempo lock),
 // and the pad finger's rate swings +-6 BPM on a 4 s breathing cycle.
 const SIM_BPMS = [72, 64, 88, 58];
+const SIM_DC = 100000;
 function simSource(rate = 50) {
   const phase = [0, 0, 0, 0];
   let n = 0;
@@ -52,7 +54,7 @@ function simSource(rate = 50) {
       if (ch === 0 && t < 10) return 0;
       const bpm = ch === 3 ? b + 6 * Math.sin((2 * Math.PI * t) / 4) : b;
       phase[ch] += (2 * Math.PI * bpm) / 60 / rate;
-      return Math.round(100000 - 400 * Math.sin(phase[ch]) + Math.random() * 40);
+      return Math.round(SIM_DC - 400 * Math.sin(phase[ch]) + Math.random() * 40);
     });
   };
 }
@@ -67,13 +69,24 @@ export function startSim(onFrame) {
 // those as 0) get simulated pulses. Real channels pass through untouched.
 // With route() returning a channel, the first connected sensor's reading moves to
 // that channel and every other channel is simulated (debugging with one sensor).
-export function simFill(onFrame, route = () => null) {
-  const next = simSource();
+// While a finger is on, the real reading is re-centred on the simulator's DC level:
+// only its pulse wave is kept. Switching voices then swaps one pulse for another with
+// no level jump, so the beat detector keeps its BPM instead of re-settling from scratch.
+export function simFill(onFrame, route = () => null, rate = 50) {
+  const next = simSource(rate);
+  const dcA = 1 / (rate * 1.5); // same time constant as signal.js's DC tracker
+  let dc = null;
   return (raws) => {
     const sim = next();
     const to = route();
     if (to == null) return onFrame(raws.map((r, ch) => (r === 0 ? sim[ch] : r)));
     const src = raws.findIndex((r) => r !== 0);
-    onFrame(sim.map((s, ch) => (ch === to ? (src < 0 ? 0 : raws[src]) : s)));
+    const r = src < 0 ? 0 : raws[src];
+    let real = r; // no sensor (0) or no finger (low) passes through, so it reads as off
+    if (r >= FINGER_MIN) {
+      dc = dc === null ? r : dc + (r - dc) * dcA;
+      real = Math.round(r - dc + SIM_DC);
+    } else dc = null;
+    onFrame(sim.map((s, ch) => (ch === to ? real : s)));
   };
 }

@@ -22,12 +22,35 @@ assert.equal(parseLine(''), null);
   let to = 2;
   const fill = simFill((r) => out.push(r), () => to);
   for (let i = 0; i < 50; i++) fill([123456, 0, 0, 0]);
-  assert.ok(out.every((r) => r[2] === 123456 && r[1] > 99000 && r[3] > 99000 && r[0] !== 123456));
+  assert.ok(out.every((r) => r[2] === 100000 && r[1] > 99000 && r[3] > 99000)); // steady real value re-centred
   to = 3;
   fill([1000, 0, 0, 0]);                 // finger off still routes (reads low, not 0)
   assert.equal(out.at(-1)[3], 1000);
   fill([0, 0, 0, 0]);                    // no sensor at all: the routed voice reads 0
   assert.equal(out.at(-1)[3], 0);
+}
+{
+  // Switching the routed voice: no level jump on either side, and the beat detector on
+  // the newly routed voice keeps beating and keeps a BPM (no re-settling ramp).
+  let to = 2;
+  const out = [];
+  const fill = simFill((r) => out.push(r), () => to);
+  const real = (i) => Math.round(123000 - 300 * Math.sin((2 * Math.PI * 1.1 * i) / 50)); // 66 BPM, own DC
+  for (let i = 0; i < 50 * 8; i++) fill([real(i), 0, 0, 0]);
+  to = 1;                                // bass was simulated, now gets the real pulse
+  for (let i = 50 * 8; i < 50 * 20; i++) fill([real(i), 0, 0, 0]);
+  const near = (v) => Math.abs(v - 100000) < 1200;
+  assert.ok(out.slice(50 * 2).every((r) => near(r[1]) && near(r[2]) && near(r[3])), 'no DC jump');
+  const ch = createChannel(50);
+  let beatsAfter = 0, bpmGap = false, s;
+  out.forEach((r, i) => {
+    s = ch(r[1]);
+    if (i > 50 * 8 && i < 50 * 10 && s.bpm === 0) bpmGap = true;
+    if (i >= 50 * 8 && i < 50 * 11 && s.beat) beatsAfter++;
+  });
+  assert.ok(!bpmGap, 'bpm carried over the switch');
+  assert.ok(beatsAfter >= 2, `beats in the 3 s after switching: ${beatsAfter}`);
+  assert.ok(Math.abs(s.bpm - 66) < 4, `bpm settles on the real heart: ${s.bpm}`);
 }
 console.log('serial ok');
 
