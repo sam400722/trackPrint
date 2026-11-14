@@ -286,3 +286,30 @@ import { ring, pitch01 } from './ui/lane.js';
   assert.equal(r.live(8000, 1e9), 3);
 }
 console.log('lane ok');
+
+{
+  const { mergeStep, newField, stepField, SPLIT_MS } = await import('./ui/dynamics.js');
+  const all = [true, true, true, true], three = [true, true, false, true];
+  let st = { merged: false, upAt: null };
+  assert.equal(mergeStep(st, three, 0).merged, false);              // not everyone is ready
+  st = mergeStep(st, all, 1000);
+  assert.deepEqual(st, { merged: true, upAt: null });               // all four ready: merge
+  st = mergeStep(st, three, 2000);
+  assert.deepEqual(st, { merged: true, upAt: 2000 });               // one lifts: the clock starts, still merged
+  assert.equal(mergeStep(st, three, 2000 + SPLIT_MS).merged, true); // exactly at the limit: still merged
+  assert.equal(mergeStep(st, three, 2001 + SPLIT_MS).merged, false);// past it: split
+  assert.deepEqual(mergeStep(st, all, 3000), { merged: true, upAt: null }); // finger back in time: clock cleared
+
+  const f = newField(), dt = 1 / 60;
+  stepField(f, true, dt);
+  assert.ok(f.lift > 0.85 && f.fl > 0.9, 'beat sets lift and flash');
+  let peak = 0, lagged = false;
+  for (let i = 0; i < 60; i++) { stepField(f, false, dt); peak = Math.max(peak, f.F); if (f.F > 0.4 && f.L < f.F) lagged = true; }
+  assert.ok(peak > 0.5 && peak < 1.3, `crown rises on a beat: peak ${peak}`);
+  assert.ok(lagged, 'L lags behind F');
+  for (let i = 0; i < 240; i++) stepField(f, false, dt);
+  assert.ok(Math.abs(f.F) < 0.01 && Math.abs(f.L) < 0.01 && f.lift < 0.01 && f.fl < 0.01, 'settles between beats');
+  stepField(f, false, 0);
+  assert.ok(Number.isFinite(f.F) && Number.isFinite(f.L), 'dt = 0 is safe');
+}
+console.log('dynamics ok');
