@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseLine, simFill } from './serial.js';
+import { parseLine, simChannels, simFill } from './serial.js';
 
 assert.deepEqual(parseLine('1,2,3,4'), [1, 2, 3, 4]);
 assert.deepEqual(parseLine('100000,0,262143,5\r'), [100000, 0, 262143, 5]);
@@ -313,3 +313,19 @@ console.log('lane ok');
   assert.ok(Number.isFinite(f.F) && Number.isFinite(f.L), 'dt = 0 is safe');
 }
 console.log('dynamics ok');
+
+{
+  const out = [];
+  const f = simChannels((r) => out.push(r), [3]);
+  f([60000, 70000, 80000, 3700]);  // three real fingers on: sensor 4 is simulated
+  assert.deepEqual(out[0].slice(0, 3), [60000, 70000, 80000]);
+  assert.ok(out[0][3] > 90000, 'simulated finger on');
+  f([60000, 1000, 80000, 3700]);   // one real finger lifts: the simulated one lifts too
+  assert.equal(out[1][3], 0);
+  // the simulated channel beats at a steady BPM through the real signal chain
+  const { createChannel } = await import('./signal.js');
+  const chan = createChannel(50); let bpm = 0;
+  for (let i = 0; i < 50 * 20; i++) { f([60000, 70000, 80000, 0]); bpm = chan(out.at(-1)[3]).bpm; }
+  assert.ok(bpm > 50 && bpm < 66, `sim pad bpm ${bpm}`);
+}
+console.log('simChannels ok');

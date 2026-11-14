@@ -80,6 +80,8 @@ Open http://localhost:8000 in Chrome or Edge. Use **Simulate** (no hardware) or 
 
 Not all four sensors wired yet? Open http://localhost:8000/?fill=sim and use **Connect sensors**: channels whose sensor reads `0` (not plugged in) get simulated pulses, the real ones play from your fingers.
 
+**A sensor is broken?** Open http://localhost:8000/?sim=4 (sensor numbers as on screen, comma-separated for several) and use **Connect sensors**. That sensor plays a simulated heartbeat whenever every working sensor has a finger on it, so the four can still merge.
+
 ## Testing with one sensor
 `firmware/trackprint_single` is for testing with a single MAX30102 wired straight to the Uno, without the mux: SDA → A4, SCL → A5, VIN → 3.3V, GND → GND. It sends the same `ir0,ir1,ir2,ir3` lines as the full firmware. The real reading goes on `CHANNEL` (default 0, drums, so your finger sets the tempo) and the other channels send `0`.
 

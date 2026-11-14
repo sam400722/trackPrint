@@ -70,6 +70,17 @@ export function startSim(onFrame) {
   return () => clearInterval(id);
 }
 
+// Replace the listed channels (a broken sensor) with simulated pulses. A simulated finger is
+// only on while every real channel has a finger, so the band still merges when the real players do.
+export function simChannels(onFrame, chans, rate = 50) {
+  const next = simSource(rate);
+  return (raws) => {
+    const sim = next();
+    const held = raws.every((r, ch) => chans.includes(ch) || r >= FINGER_MIN);
+    onFrame(raws.map((r, ch) => (chans.includes(ch) ? (held ? sim[ch] : 0) : r)));
+  };
+}
+
 // Wrap a frame callback so channels whose sensor is missing (the firmware reports
 // those as 0) get simulated pulses. Real channels pass through untouched.
 // With route() returning a channel, the first connected sensor's reading moves to
