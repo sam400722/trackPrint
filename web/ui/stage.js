@@ -23,7 +23,7 @@ const tok = (name) => css.getPropertyValue(name).trim();
 // shortcut: tokens are 6-digit hex, parse more formats if style.css changes that.
 const hex3 = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 const COLS = VOICES.map((v) => tok(`--${v}`));
-const COL = { other: tok('--other'), text: tok('--text'), muted: tok('--muted'), serif: tok('--num') };
+const COL = { other: tok('--other'), text: tok('--text'), muted: tok('--muted'), line: tok('--line'), serif: tok('--num') };
 COL.v = Object.assign(Object.create(null), ...VOICES.map((v, i) => ({ [v]: COLS[i] }))); // unknown voices fall back to --other
 COL.lead = COL.v.lead;
 document.fonts.load(`10px ${COL.serif}`); // roman Fraunces isn't used by the DOM, so ask for it
