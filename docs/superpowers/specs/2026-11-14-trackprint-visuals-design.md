@@ -1,59 +1,60 @@
-# trackPrint visuals: design direction
+# flatline visuals: design direction
 
-Decisions for [Part B: Visuals](../plans/2026-11-14-trackprint-visuals.md). Live mockups: [`2026-11-14-trackprint-visuals-mockups.html`](2026-11-14-trackprint-visuals-mockups.html). Open it in a browser. The chosen direction is mockup **E**.
+Decisions for [Part B: Visuals](../plans/2026-11-14-trackprint-visuals.md). The current mockup is [`2026-11-14-trackprint-ferrofluid-mockups.html`](2026-11-14-trackprint-ferrofluid-mockups.html), ported by [the flatline overhaul plan](../plans/2026-11-14-flatline-ferrofluid-overhaul.md). It supersedes the earlier "organic stage" direction (mockup **E** in [`2026-11-14-trackprint-visuals-mockups.html`](2026-11-14-trackprint-visuals-mockups.html)). The site is named **flatline**; files, repo and Pi service keep `trackprint`.
 
-## Direction: "Organic stage" (hybrid of A and C)
+## Direction: black chrome ferrofluid in backlit windows
 
-The overall feel comes from C (organic): breathing shapes, deep night gradient, soft glow, serif italics. A (clinical monitor) adds the information people need: a live BPM per player, a pulse trace per player, and a record of the notes being played. Choices beyond this were left to the implementer and are reversible.
+Each player is a glossy near-black ferrofluid ball in front of a round window glowing in that player's colour. A live BPM, a pulse trace and a record of the notes being played carry the information.
 
 ## Tokens (B1)
 
 | Token | Value | Use |
 |---|---|---|
-| `--bg-a` → `--bg-b` | `#0b1430` → `#1d1238` | diagonal background gradient |
-| `--text` | `#f4ecff` | title, BPM numbers |
-| `--muted` | `rgb(244 236 255 / .55)` | status line, captions, empty states |
-| `--drums` | `#ff9e7a` | peach |
-| `--bass` | `#7ad1ff` | sky |
-| `--lead` | `#ffe07a` | butter |
-| `--pad` | `#c79bff` | lavender |
+| `--bg` → `--bg2` | `#070708`, `#17181c` | near-black ground with a faint radial lift |
+| `--text` | `#f3f2ee` | title, BPM numbers |
+| `--muted` | `rgb(243 242 238 / .56)` | status line, captions, empty states |
+| `--line` | `rgb(243 242 238 / .16)` | control outlines, lane hairline, dim `--` |
+| `--drums` | `#ff3b1f` | red |
+| `--bass` | `#1f6bff` | blue |
+| `--lead` | `#ffd400` | yellow |
+| `--pad` | `#ff2d87` | pink |
 | `--other` | `#9fe6c4` | fallback for any voice name the UI doesn't know |
 
-Pad wash hues rotate by chord root: `#c79bff`, `#ff9ed8`, `#9bb7ff`.
+Type: **Fraunces** (roman for BPM numerals, italic for title, labels and empty states) and **Nunito** (controls, status). Self-hosted as woff2 in `web/ui/fonts/`, because the demo may run offline.
 
-Type: **Fraunces** (roman for BPM numerals, italic for title, voice names and empty states) and **Nunito** 400/600 (controls, status). Self-host only those faces as woff2 in `web/ui/fonts/`, because the demo may run offline.
+## Layout (B2), 16:9, everything sized from `u` = 1vh so it scales to a projector
 
-## Layout (B2), 16:9, everything sized in `vh` so it scales to a projector
-
-- **Header** (~12vh): `trackPrint` in Fraunces italic on the left. On the right: Connect sensors, Simulate, mode (two-option radio group), kit `<select>`, and a status line in muted Nunito. Controls are pill-outlined text buttons with a 2px `--text` focus ring.
-- **Stage** (~60vh): four columns, one per voice in `VOICES` order. Each column holds the breathing shape, a large BPM (Fraunces ~10vh), the label `drums · bpm`, and a soft trace under it.
-- **Notes lane** (bottom ~23vh): the last 5 s of `note` events, newest at the right, with the `wave` analyser as a faint ribbon behind it and the caption *what you hear*.
-- The stage and lane are one full-size `<canvas>` drawn in a single `requestAnimationFrame` loop. The header, banners and controls are DOM.
+- **Header** (10vh) overlays a full-height stage: `flatline` in Fraunces italic on the left; Connect sensors (filled), Simulate, Performance view, kit `<select>` and a status dot + line on the right.
+- **Assigning**: four balls in four columns, each above a large BPM, a label (`drums · bpm`) and a pulse trace.
+- **Merged**: when all four players have a finger down and a BPM, the four slide into a bottom row (ball, BPM and label side by side) and one large ball forms in the centre. A finger up for 2 s splits it back.
+- **Notes lane** in the bottom 16vh, in both states.
+- `#gl` (WebGL2, `web/ui/fluid.js`) draws the balls and windows; `#stage` (2D) draws traces and the lane; BPM and labels are DOM in `#text`. One `requestAnimationFrame` loop in `web/ui/stage.js`.
 
 ## Voice panels (B3)
 
-- **Shape**: a blob outlined by two slow sine harmonics. Its radius follows the smoothed |`ac`|, and it swells about 20% on `beat`, decaying over roughly 150 ms. Fill is a radial gradient in the voice colour with a glow that flares on the beat.
-- **Trace**: a 200-sample ring buffer, scaled by its own max, drawn with round joins and a gradient stroke that fades out toward the oldest sample.
-- **BPM**: rounded, or `--` while it's 0.
-- **No finger**: the shape becomes a dashed outline, the BPM `--` dims, the label reads *rest a finger on sensor N*, and there's no trace.
+- **Ball**: a raymarched black-chrome sphere. On each beat a crown of sharp spikes rises (an underdamped spring, `web/ui/dynamics.js`) and sinks back to a smooth dome between beats. The window behind it glows in the voice colour and flashes on the beat.
+- **Trace**: a 200-sample ring buffer, scaled by its own max, gradient stroke fading toward the oldest sample. Assigning state only.
+- **BPM**: rounded, or a dim `--` while it's 0.
+- **No finger**: a small grey still ball in a dim window, a dim `--`, the label *rest a finger on sensor N*, and no trace.
 
 ## Music (B4)
 
 | Voice | In the notes lane | On the stage |
 |---|---|---|
-| drums | ring at the lane floor: kick large, snare medium, hat small, unknown drum medium | ripple rings out from the drums shape, sized by `velocity` |
-| bass, lead | dot at height = pitch (`notes[0]`), size = `velocity` | none |
-| lead | consecutive notes joined by a soft curve, so the melody draws a line | none |
-| pad | rounded capsule spanning the chord's lowest to highest note | full-screen radial colour wash in the chord's hue, fading over ~7 s |
+| drums | ring at the lane floor: kick large, snare medium, hat small, unknown drum medium | the ball ripples |
+| bass, lead | dot at height = pitch (`notes[0]`), size = `velocity` | the ball ripples |
+| lead | consecutive notes joined by a soft curve, so the melody draws a line | |
+| pad | rounded capsule spanning the chord's lowest to highest note | the ball ripples |
 | unknown voice | dot in `--other` | none |
 
-The analyser draws `wave` only. `fft` isn't used: the lane already shows pitch.
+Drum ripple rings and the pad wash are gone. The merged window is lit by a slow four-colour dye simulation (stable fluids), stirred on each player's beat. The analyser draws `wave` only, as a faint ribbon behind the lane.
 
 ## States (B5)
 
-- **Idle**: four dashed shapes and one line in the stage: *Connect the sensors, or press Simulate to hear a demo.*
+- **Idle**: four grey balls and one line: *Connect the sensors, or press Simulate to hear a demo.*
 - **Unsupported browser**: Connect is disabled, with the line *Use Chrome or Edge to connect sensors. Simulate still works.*
-- **Disconnected / error**: a soft lavender banner under the header (never red) with a Reconnect button. A cancelled port picker reads *No port chosen. Connect sensors to try again.*
-- **Reduced motion**: no ripple rings and no glow flare. The beat swell becomes a brief opacity lift, and the wash fades twice as slowly.
+- **Disconnected / error**: a neutral banner under the header (never red) with a Reconnect button. A cancelled port picker reads *No port chosen. Connect sensors to try again.*
+- **Reduced motion**: no spikes and no slide; the layouts cross-fade, the dye window is still, and brightness lifts briefly on the beat.
+- **No WebGL2 or float render targets**: a plain message; text, traces and lane still work.
 - **Performance view**: a button, plus the `F` key, enters fullscreen and hides the header; the cursor hides after 2 s idle; `Esc` exits.
 - **Screen readers**: a visually hidden list (voice, finger on/off, BPM) updated once per second. It isn't `aria-live`, to avoid flooding.
