@@ -52,9 +52,12 @@ on('status', (s) => {
 });
 on('mode', (m) => { mode = m; counts = [0, 0, 0, 0]; });
 on('kit', (name) => {
-  kit.silence();
-  kit.dispose();
+  if (!KITS[name]) return;
+  const old = kit;
   kit = KITS[name](master);
+  old.silence();
+  // Let release and effect tails ring out before freeing the old kit's nodes.
+  setTimeout(() => old.dispose(), (old.tail ?? 3) * 1000);
 });
 
 emit('kits', Object.keys(KITS));
