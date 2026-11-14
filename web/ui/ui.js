@@ -24,7 +24,7 @@ document.querySelectorAll('input[name=mode]').forEach((r) =>
 $('kit').onchange = (e) => emit('kit', e.target.value);
 
 const LINES = {
-  idle: 'Connect the sensors, or press Simulate.',
+  idle: 'Ready', // the stage carries the full instruction
   running: 'Playing',
   disconnected: 'Sensors disconnected',
 };
@@ -35,11 +35,12 @@ on('status', (s) => {
   const msg = cancelled ? 'No port chosen. Connect sensors to try again.'
     : err ? s.slice(6).trim() || 'Something went wrong.' : LINES.disconnected;
   $('status').dataset.state = state;
-  $('status').textContent = cancelled ? 'No port chosen' : state === 'error' || state === 'other' ? String(s) : LINES[s];
+  $('status').textContent = cancelled ? 'No port chosen' : err ? 'Needs attention' : state === 'other' ? String(s) : LINES[s]; // full error is in the banner
   $('bmsg').textContent = msg;
   $('banner').hidden = !(err || s === 'disconnected');
   $('reconnect').hidden = noSerial;
   $('idle').hidden = s !== 'idle';
+  $('unsup').hidden = !noSerial || s === 'running'; // don't cover the traces during Simulate
   enable();
 });
 enable();
