@@ -63,47 +63,63 @@ import { start } from './core.js';
   assert.deepEqual(status, ['idle', 'running']);
 }
 {
-  // overlapping starts: A (slow) is superseded by B (fast)
+  // overlapping starts are serialized; resolvers are held by hand
   const log = [];
   on('status', (s) => log.push(s));
   on('frame', () => log.push('frame'));
-  let aStopped = false, aFrame, aClose;
-  const A = (f, c) => new Promise((r) => setTimeout(() => { aFrame = f; aClose = c; r(async () => (aStopped = true)); }, 5));
-  const B = async () => async () => {};
+  const defer = () => { let resolve, reject; const p = new Promise((a, b) => { resolve = a; reject = b; }); return { p, resolve, reject }; };
+  const tick = () => new Promise((r) => setImmediate(r)); // let queued jobs run to their next await
+  const noop = async () => {};
+
+  // (a) B waits for A's source and A's stop; A's frames/onClose are silent
   log.length = 0;
-  const pa = start(A);
-  await new Promise((r) => setTimeout(r, 1)); // A is now inside source()
-  await start(B);
-  await pa;
+  const aSrc = defer(), aStopped = defer();
+  let aFrame, aClose, aStops = 0, bCalled = false;
+  const pa = start((f, c) => { aFrame = f; aClose = c; return aSrc.p; });
+  await tick();                    // A is now inside its source
+  const pb = start(async () => { bCalled = true; return noop; });
+  await tick();
+  assert.ok(!bCalled);
+  aSrc.resolve(() => { aStops++; return aStopped.p; });
+  await tick();
+  assert.equal(aStops, 1);
+  assert.ok(!bCalled);             // A's stop still in flight
+  aStopped.resolve();
+  await Promise.all([pa, pb]);
+  assert.ok(bCalled);
   aFrame([1, 2, 3, 4]);
   aClose();
-  assert.ok(aStopped);
-  assert.deepEqual(log.filter((x) => x !== 'running'), []);
-  assert.equal(log.filter((x) => x === 'running').length, 1);
-}
-{
-  // two starts arrive while a slow previous stop is pending: it is called once;
-  // a superseded run whose source rejects emits no error status
-  const log = [];
-  on('status', (s) => log.push(s));
-  let stops = 0, release;
-  await start(async () => () => { stops++; return new Promise((r) => (release = r)); });
-  let rejectB;
-  const pb = start(() => new Promise((_, rej) => (rejectB = rej)));
-  const pc = start(async () => async () => {});
-  await Promise.resolve();
-  release();
-  await pc;
-  await pb; // B superseded before reaching source(): returns quietly
-  assert.equal(stops, 1);
-  // D's source is in flight, E supersedes it, then D's source rejects
-  log.length = 0;
-  let rejectD;
-  const pd = start(() => new Promise((_, rej) => (rejectD = rej)));
-  await Promise.resolve();
-  await start(async () => async () => {});
-  rejectD(new Error('late'));
-  await pd;
   assert.deepEqual(log, ['running']);
+
+  // (b) B and C arrive while a stop is pending: one stop call, B never opens, C waits
+  const hold = defer();
+  let stops = 0, bOpened = false, cOpened = false;
+  await start(async () => () => { stops++; return hold.p; });
+  const pb2 = start(async () => { bOpened = true; return noop; });
+  const pc2 = start(async () => { cOpened = true; return noop; });
+  await tick();
+  assert.equal(stops, 1);
+  assert.ok(!cOpened);
+  hold.resolve();
+  await Promise.all([pb2, pc2]);
+  assert.equal(stops, 1);
+  assert.ok(!bOpened && cOpened);
+
+  // (c) superseded failures stay quiet: source rejects / previous stop rejects
+  log.length = 0;
+  const dSrc = defer();
+  const pd = start(() => dSrc.p);
+  await tick();                    // D is inside its source
+  const pe = start(async () => noop);
+  dSrc.reject(new Error('late source'));
+  await Promise.all([pd, pe]);
+  const fStop = defer();
+  await start(async () => () => fStop.p);
+  const pf = start(async () => noop);
+  await tick();                    // F is awaiting the held stop
+  const pg = start(async () => noop);
+  fStop.reject(new Error('late stop'));
+  await Promise.all([pf, pg]);
+  assert.deepEqual(log.filter((x) => x.startsWith('error')), []);
 }
 console.log('contract ok');
