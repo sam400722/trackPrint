@@ -3,7 +3,8 @@
 // contract/* branch (see docs/superpowers/plans/2026-11-14-trackprint.md).
 //
 // event      from   detail
-// frame      core   { raws: number[4], ch: {finger, ac, beat, bpm, amp, inst}[4] }   ~50 Hz
+// frame      core   { raws: number[4], ch: {finger, ac, beat, bpm, amp, inst, held}[4] }   ~50 Hz
+//                   held: that raw reading was a bad read, replaced by the last good one
 // status*    core   'idle' | 'running' | 'disconnected' | 'error: <message>'
 // connect    ui     none. Emit inside the click handler (needs a user gesture).
 // simulate   ui     none. Same rule.

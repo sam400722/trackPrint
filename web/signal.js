@@ -21,7 +21,16 @@ function robustBpm(a) {
   return near.reduce((sum, x) => sum + x, 0) / near.length;
 }
 
-export function createChannel(rate = 50) {
+// Bad-read filter. A reading that can't be part of a pulse while a finger is on: a brief drop
+// below FINGER_MIN (the finger slips, a bus error reads 0), a saturated ADC, or a lone sample far
+// off the wave (a bus glitch). It is replaced by the last good reading, for at most HOLD samples:
+// anything that lasts longer is real (finger lifted, pressure changed) and goes through. Clean
+// readings are never touched, so the filter changes nothing on a clean signal.
+const HOLD = 5;                       // ponytail: 100 ms at 50 Hz; tune from logs (tools/analyze-log.mjs)
+const SAT = 262000;                   // the 18-bit ADC tops out at 262143
+const SPIKE_K = 12, SPIKE_MIN = 3000; // ponytail: a glitch is off the smoothed level by > max(12 swings, 3000 counts)
+
+export function createChannel(rate = 50, { filter = true } = {}) {
   const dcA = 1 / (rate * 0.5);                // DC tracker, ~0.5 s: lets go of a settling finger fast
   const lpA = 0.4;                             // light smoothing against sensor fuzz
   const envDecay = 1 - 1 / (rate * 2);         // envelope forgets over ~2 s (amp only)
@@ -31,13 +40,25 @@ export function createChannel(rate = 50) {
   const win = new Float32Array(N);
   let dc = null, lp = 0, prevAc = 0, env = 0, n = 0, k = 0, armed = true;
   let lastBeat = -Infinity, bpm = 0, inst = 0, recent = [];
+  let bad = 0, good = 0, swing = 0;   // filter: run of bad readings, last good reading, last window swing
 
   return function step(raw) {
     n++;
-    if (raw < FINGER_MIN) {
-      dc = null; env = 0; bpm = 0; inst = 0; recent = []; prevAc = 0; k = 0; armed = true; lastBeat = -Infinity;
-      return { finger: false, ac: 0, beat: false, bpm: 0, amp: 0, inst: 0 };
+    let held = false;
+    if (filter && dc !== null) {      // a finger is on: screen this reading
+      const off = raw < FINGER_MIN, sat = raw >= SAT;
+      const spike = !off && !sat && k >= warmup && Math.abs(raw - lp) > Math.max(SPIKE_K * swing, SPIKE_MIN);
+      if (off || sat || spike) {
+        if (bad < HOLD) { bad++; raw = good; held = true; }
+        else if (spike) { lp = raw; bad = 0; } // it lasted: a real level shift, so smoothing restarts there
+        // off and sat that last past HOLD go through: the finger lifted, or the sensor really is saturated
+      } else bad = 0;
     }
+    if (raw < FINGER_MIN) {
+      dc = null; env = 0; bpm = 0; inst = 0; recent = []; prevAc = 0; k = 0; armed = true; lastBeat = -Infinity; bad = 0;
+      return { finger: false, ac: 0, beat: false, bpm: 0, amp: 0, inst: 0, held: false };
+    }
+    if (!held) good = raw;
     if (dc === null) { dc = raw; lp = raw; }
     dc += (raw - dc) * dcA;
     lp += (raw - lp) * lpA;
@@ -50,7 +71,8 @@ export function createChannel(rate = 50) {
       if (win[j] > hi) hi = win[j];
       if (win[j] < lo) lo = win[j];
     }
-    const mid = (hi + lo) / 2, swing = hi - lo;
+    const mid = (hi + lo) / 2;
+    swing = hi - lo;
     if (ac < mid - REARM * swing) armed = true;
     const beat = armed && prevAc < mid && ac >= mid && swing > MIN_SWING
       && k >= warmup && n - lastBeat > refractory;
@@ -65,6 +87,7 @@ export function createChannel(rate = 50) {
       lastBeat = n;
     }
     // amp: pulse envelope (finger pressure). inst: BPM of the latest beat, 0 until two beats.
-    return { finger: true, ac, beat, bpm, amp: env, inst };
+    // held: this reading was a bad read, replaced by the last good one.
+    return { finger: true, ac, beat, bpm, amp: env, inst, held };
   };
 }
