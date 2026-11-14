@@ -1,6 +1,7 @@
 // Controls + status. The canvas (stage and notes lane) is drawn in stage.js.
 import { emit, on, VOICES } from '../bus.js';
 import './stage.js';
+import { bindLogButton } from './log.js';
 
 const $ = (id) => document.getElementById(id);
 const buttons = [$('connect'), $('sim'), $('reconnect')];
@@ -21,6 +22,7 @@ $('reconnect').onclick = () => press('connect');
 $('sim').onclick = () => press('simulate');
 if (new URLSearchParams(location.search).has('demo')) press('simulate'); // dev: ?demo starts the simulation for screenshots
 $('kit').onchange = (e) => emit('kit', e.target.value);
+bindLogButton($('log'));
 
 // Debugging with ?fill=sim: click a voice's column to put the real sensor on it.
 $('stage').addEventListener('click', (e) => {
