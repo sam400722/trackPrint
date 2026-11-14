@@ -2,6 +2,8 @@
 
 The project folder, repo, and Pi service are still named `trackprint`.
 
+Project setup and usage are documented below. For design decisions and implementation history, see the [documentation index](docs/README.md).
+
 Four heart-rate sensors → four-voice electronic band in the browser.
 ch0 drums · ch1 bass · ch2 lead · ch3 pad.
 
