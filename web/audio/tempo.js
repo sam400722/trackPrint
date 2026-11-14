@@ -4,9 +4,20 @@ export const TEMPO_DEFAULT = 90;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 
 // Heart rate 50..110 maps linearly to song tempo 100..180, clamped.
-export function songBpm(hr) {
+export function songBpm(hr, genreName) {
+  if (genreName) {
+    const { min, max } = GENRE_TEMPOS[genreName];
+    return min + (max - min) * clamp((hr - 50) / 60, 0, 1);
+  }
   return 100 + 80 * clamp((hr - 50) / 60, 0, 1);
 }
+
+const GENRE_TEMPOS = {
+  'French house': { min: 112, max: 128, default: 120 },
+  'UK garage': { min: 128, max: 138, default: 132 },
+  Ambient: { min: 60, max: 90, default: 72 },
+  'Russian hardbass': { min: 145, max: 165, default: 150 },
+};
 
 // Tempo band: slow < 125 <= mid <= 155 < fast. Leaving the previous band takes
 // 3 BPM past its edge, so a tempo sitting on an edge doesn't flip every step.
@@ -25,15 +36,16 @@ export function band(bpm, prev) {
 //   follow  then moves only for changes of 2 BPM or more
 //   release finger lifts: back to 90
 // The caller glides the transport to each new target over 2 bars.
-export function createTempo() {
-  let target = TEMPO_DEFAULT;
+export function createTempo(genreName) {
+  const genre = genreName && GENRE_TEMPOS[genreName];
+  let target = genre?.default ?? TEMPO_DEFAULT;
   let locked = false;
   return function update(drum) {
     if (!drum.on || !drum.settled) {
       locked = false;
-      target = TEMPO_DEFAULT;
+      target = genre?.default ?? TEMPO_DEFAULT;
     } else {
-      const want = songBpm(drum.hr);
+      const want = songBpm(drum.hr, genreName);
       if (!locked || Math.abs(want - target) >= 2) target = want;
       locked = true;
     }
