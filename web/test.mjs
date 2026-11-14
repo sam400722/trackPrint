@@ -110,7 +110,7 @@ assert.deepEqual(mapVoice('lead', 6 << 12).notes, mapVoice('lead', 1 << 12).note
 }
 console.log('mapping ok');
 
-import { songBpm, band, createTempo, TEMPO_DEFAULT } from './audio/tempo.js';
+import { songBpm, band, createTempo, TEMPO_MIN, TEMPO_MAX } from './audio/tempo.js';
 import { createHeart, HR_DEFAULT } from './audio/heart.js';
 import { leadLevel, LEAD_STEPS, DRUM_PATTERNS, BASS_PATTERNS, isOff8th } from './audio/patterns.js';
 
@@ -138,16 +138,19 @@ import { leadLevel, LEAD_STEPS, DRUM_PATTERNS, BASS_PATTERNS, isOff8th } from '.
   assert.equal(band(152, 'fast'), 'mid');
 
   // tempo follower
-  const tempo = createTempo();
+  const picks = [0.25, 0.75];
+  const tempo = createTempo(() => picks.shift());
   const h = (on, settled, hr) => ({ on, settled, hr, press: 0.5, breath: 0 });
-  assert.equal(tempo(h(false, false, 75)), TEMPO_DEFAULT);
-  assert.equal(tempo(h(true, false, 72)), TEMPO_DEFAULT);          // holds 90 until settled
+  assert.equal(tempo(h(false, false, 75)), 75);                    // random default: 70 + 20 * 0.25
+  assert.equal(tempo(h(false, false, 75)), 75);                    // same pick while the drums stay off
+  assert.equal(tempo(h(true, false, 72)), 75);                     // holds it until settled
   assert.equal(tempo(h(true, true, 72)), songBpm(72));             // lock
   assert.equal(tempo(h(true, true, 72.5)), songBpm(72));           // +0.67 BPM jitter ignored
   assert.equal(tempo(h(true, true, 73)), songBpm(72));             // +1.33 still ignored
   assert.equal(tempo(h(true, true, 74)), songBpm(74));             // +2.67 follows
-  assert.equal(tempo(h(false, false, 75)), TEMPO_DEFAULT);         // release
+  assert.equal(tempo(h(false, false, 75)), 85);                    // release: a new pick, 70 + 20 * 0.75
   assert.equal(tempo(h(true, true, 90)), songBpm(90));             // re-lock after landing again
+  for (let i = 0; i < 200; i++) { const t = createTempo()(h(false, false, 0)); assert.ok(t >= TEMPO_MIN && t <= TEMPO_MAX, `default ${t}`); }
 
   // heart: breath follows a +-6 BPM breathing sine on a 70 BPM heart; press tracks amp
   const heart = createHeart(50);

@@ -1,6 +1,8 @@
 // Song tempo from the drum finger's heart. Pure.
 
-export const TEMPO_DEFAULT = 90;
+// With the drum finger off the song plays at a random tempo in this range, picked anew each time
+// the drums go off. TEMPO_DEFAULT is only the transport's starting point before the first pick.
+export const TEMPO_MIN = 70, TEMPO_MAX = 90, TEMPO_DEFAULT = 80;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 
 // Heart rate 50..110 maps linearly to song tempo 100..180, clamped.
@@ -20,18 +22,19 @@ export function band(bpm, prev) {
 }
 
 // Tempo follower. update(drumHeart) -> target BPM.
-//   default 90 while the drum finger is off or unsettled
+//   default random 70..90 while the drum finger is off or unsettled (new pick each release)
 //   lock    first settled reading jumps the target to songBpm(hr)
 //   follow  then moves only for changes of 2 BPM or more
-//   release finger lifts: back to 90
+//   release finger lifts: a new random default
 // The caller glides the transport to each new target over 2 bars.
-export function createTempo() {
-  let target = TEMPO_DEFAULT;
+export function createTempo(random = Math.random) {
+  const pick = () => TEMPO_MIN + (TEMPO_MAX - TEMPO_MIN) * random();
+  let target = pick();
   let locked = false;
   return function update(drum) {
     if (!drum.on || !drum.settled) {
+      if (locked) target = pick(); // just released
       locked = false;
-      target = TEMPO_DEFAULT;
     } else {
       const want = songBpm(drum.hr);
       if (!locked || Math.abs(want - target) >= 2) target = want;
