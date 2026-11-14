@@ -6,9 +6,14 @@ export function parseLine(line) {
   return /^\d+,\d+,\d+,\d+$/.test(t) ? t.split(',').map(Number) : null;
 }
 
+// The Pi Zero's USB gadget serial (Linux g_serial defaults: NetChip VID, CDC ACM PID). The picker
+// lists only the Pi, not the dozens of empty ttyS ports. ?port=any lists every port (the old Arduino).
+export const PI_GADGET = { usbVendorId: 0x0525, usbProductId: 0xa4a7 };
+const anyPort = () => new URLSearchParams(globalThis.location?.search).get('port') === 'any';
+
 export async function connectSerial(onFrame, onClose) {
-  const port = await navigator.serial.requestPort();
-  await port.open({ baudRate: 115200 });
+  const port = await navigator.serial.requestPort(anyPort() ? {} : { filters: [PI_GADGET] });
+  await port.open({ baudRate: 115200 }); // ignored by the gadget; the Arduino sketches use it
   const decoder = new TextDecoderStream();
   const piped = port.readable.pipeTo(decoder.writable).catch(() => {});
   const reader = decoder.readable.getReader();
