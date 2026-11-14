@@ -7,6 +7,8 @@ Project setup and usage are documented below. For design decisions and implement
 Four heart-rate sensors → four-voice electronic band in the browser.
 ch0 drums · ch1 bass · ch2 lead · ch3 pad.
 
+**Quick start.** No hardware needed: `cd web && python3 -m http.server 8000`, open http://localhost:8000 in Chrome or Edge, press **Simulate**. With the Pi: [set it up once](#pi-setup), plug its USB port into the laptop, then do the same and press **Connect sensors**.
+
 ## How it fits together
 ```
 4x MAX30102 ──(4 separate I2C buses)──► Raspberry Pi Zero 2 W ──(USB serial)──► laptop browser
@@ -33,7 +35,7 @@ Pin numbers are physical header pins. Every sensor's VIN goes to 3.3V and every 
 Only 3.3V belongs on these pins. Never put 5V on a Pi GPIO pin. The breakouts' own SDA/SCL resistors are the real pull-ups. The Pi's weak internal ones (see setup) only keep an empty bus from hanging. Some cheap purple MAX30102 boards pull up to 1.8V, and those need the pull-up jumper or trace moved to 3.3V. If a sensor reads `0`, check its wiring and pull-up voltage.
 
 ## Pi setup
-Flash Raspberry Pi OS Lite (Trixie), enable SSH, then from this repo:
+Flash Raspberry Pi OS Lite (Trixie) with Raspberry Pi Imager, set the hostname to `flatline`, the user to `flatline`, and enable SSH. Join it to your Wi-Fi for this first setup (it needs the network for `apt`). Then from this repo:
 ```bash
 ssh flatline@flatline.local 'mkdir -p trackprint'
 scp pi/* flatline@flatline.local:trackprint/
@@ -56,8 +58,10 @@ ssh flatline@flatline.local 'cd trackprint && sudo ./setup.sh && sudo reboot'
 
 To update the reader later, copy `pi/` over again and re-run `setup.sh`, then run `sudo systemctl restart trackprint`.
 
+For the laptop-side tools below, add an `ssh flatline` alias to `~/.ssh/config` (`Host flatline`, `HostName flatline.local`, `User flatline`) and use key login, because they run `ssh flatline` non-interactively. Once the Pi is plugged in over USB, ssh needs its Wi-Fi.
+
 ## Sensor reader
-`pi/trackprint.py` sets up each MAX30102 the same way the old Arduino sketch did: LED power 0x1F, 4-sample average, red+IR, 200 sps, which works out to 50 Hz out. It writes one `ir0,ir1,ir2,ir3` line every 20 ms to `/dev/ttyGS0`, with `0` for a missing sensor. Each sensor is read in its own thread, so an unplugged sensor drops to `0` and is picked up again within about 2 s of being plugged back in.
+`pi/trackprint.py` sets up each MAX30102 the same way the old Arduino sketch did: LED power 0x1F, 4-sample average, red+IR, 200 sps, which works out to 50 Hz out. LED power is `0x1F` by default (the `LED_POWER` knob in the file). It writes one `ir0,ir1,ir2,ir3` line every 20 ms to `/dev/ttyGS0`, with `0` for a missing sensor. Each sensor is read in its own thread, so an unplugged sensor drops to `0` and is picked up again within about 2 s of being plugged back in.
 
 Checks, over ssh:
 ```bash
@@ -68,15 +72,27 @@ sudo systemctl start trackprint
 ```
 A value jumps above ~45000 with a finger on (the app counts anything over 30000 as a finger).
 
+**Tuning the signal, no restart** (over ssh, as `flatline`, no sudo):
+```bash
+echo led=0x3F > ~/trackprint.conf && pkill -HUP -f trackprint.py   # LED power 0x00-0x7F; raise it if the signal is weak, lower it if raw IR saturates near 262143. Kept across restarts.
+pkill -USR1 -f trackprint.py                                       # write the last 30 s of red + IR per sensor to /tmp/trackprint-dump.csv
+```
+
+**Live pulse-quality meter** (on the laptop, needs `numpy`):
+```bash
+python3 tools/pulse_meter.py
+```
+Every 2 s it pulls the last 8 s of red + IR over ssh and prints, per sensor, the signal level, pulse size, rhythm, IR/red ratio and shake, with a verdict (`GOOD pulse, 72 BPM`, `MOVING: hold still`, ...). Use it to find the right LED power and finger pressure. It covers sensors 1-3, since sensor 4 is broken. Ctrl+C stops it.
+
 Connect the Pi's **USB** port (not PWR IN) to the laptop. That one cable powers the Pi and carries the data. The Pi takes about 30 s to boot, and then it shows up as a serial port (`/dev/cu.usbmodem*` on a Mac). Shut it down with `sudo poweroff` before unplugging, so the SD card doesn't get corrupted.
 
-`firmware/trackprint/` is the old Arduino + TCA9548A sketch, kept for reference.
+`firmware/trackprint/` is the old Arduino + TCA9548A sketch, kept for reference. The Arduino sections below (single-sensor testing, Linux troubleshooting) are legacy: the Pi is the default sensor source now.
 
 ## Run
 ```bash
 cd web && python3 -m http.server 8000
 ```
-Open http://localhost:8000 in Chrome or Edge. Use **Simulate** (no hardware) or **Connect sensors**, and pick the Pi's serial port.
+Open http://localhost:8000 in Chrome or Edge. Use **Simulate** (no hardware) or **Connect sensors**. The picker lists only the Pi (its USB gadget serial port); add `?port=any` to list every port, e.g. for the old Arduino.
 
 The kit menu contains four evolving genre styles:
 
@@ -93,9 +109,11 @@ breathing-rate controls.
 
 Not all four sensors wired yet? Open http://localhost:8000/?fill=sim and use **Connect sensors**: channels whose sensor reads `0` (not plugged in) get simulated pulses, the real ones play from your fingers.
 
+**Save log / analyze.** **Save log** downloads a CSV of every reading since connecting. Replay it through the real beat detector with `node tools/analyze-log.mjs ~/Downloads/flatline-log-*.csv`.
+
 **Broken sensor.** Sensor 4 doesn't work right now, so the app simulates it by default (`BROKEN_SENSORS` in `web/serial.js`; set it to `[]` once it's fixed). A simulated sensor plays a heartbeat whenever every working sensor has a finger on it, so the four can still merge. `?sim=3,4` picks other sensors to simulate; `?sim=none` simulates nothing. Logs note which sensors were simulated and the analyzer skips them.
 
-## Testing with one sensor
+## Testing with one sensor (legacy Arduino)
 `firmware/trackprint_single` is for testing with a single MAX30102 wired straight to the Uno, without the mux: SDA → A4, SCL → A5, VIN → 3.3V, GND → GND. It sends the same `ir0,ir1,ir2,ir3` lines as the full firmware. The real reading goes on `CHANNEL` (default 0, drums, so your finger sets the tempo) and the other channels send `0`.
 
 ```bash
@@ -107,10 +125,10 @@ arduino-cli upload  -b arduino:avr:uno -p /dev/ttyACM0 firmware/trackprint_singl
 
 At boot it prints one `# MAX30102 found on A4/A5` (or `not found`) line, which the web app ignores. Then come 50 lines per second. With no finger the reading is around 1,000; with a finger it's above 50,000.
 
-To play: open http://localhost:8000/?fill=sim, click **Connect sensors**, pick the Arduino. Your finger plays drums and the other three voices are simulated. Click any circle to move the sensor to that voice; its label shows `· sensor`. This works with whichever channel the sensor is on, so you don't need to change `CHANNEL` and re-upload.
+To play: open http://localhost:8000/?fill=sim&port=any, click **Connect sensors**, pick the Arduino. Your finger plays drums and the other three voices are simulated. Click any circle to move the sensor to that voice; its label shows `· sensor`. This works with whichever channel the sensor is on, so you don't need to change `CHANNEL` and re-upload.
 
 ## Troubleshooting (Linux)
-These came up on an Arch Linux laptop with an Uno R3.
+These came up on an Arch Linux laptop with an Uno R3. The permission and browser notes apply to the Pi's serial port too, which shows up as `ttyACM*`.
 
 **No `arduino-cli`, and no sudo needed to install it.** Download the release binary into your home folder:
 ```bash
@@ -137,5 +155,5 @@ Type your username out instead of using `$USER`. On our machine `$USER` was empt
 
 ## Test
 ```bash
-node web/test.mjs
+for t in test audio-test fluid-test stage-test; do node web/$t.mjs || break; done
 ```
