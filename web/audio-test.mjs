@@ -176,7 +176,8 @@ test('kit boundaries expose four bounded, disposable, duration-aware kits', () =
         set: (value) => { automation.push({ method: 'property', value, node: this }); distortion = value; },
       });
       this.envelope = { decay: 0 };
-      this.filterEnvelope = { baseFrequency: new Param(0) };
+      this.filter = { frequency: new Param(0, this) };
+      this.filterEnvelope = { baseFrequency: 0 };
       nodes.push(this);
     }
     connect(node) { this.connections.push(node); return node; }
@@ -253,7 +254,9 @@ test('live kit controls smooth real nodes and remain neutral before heart settle
         get: () => distortion,
         set: (value) => { automation.push({ method: 'property', value, node: this }); distortion = value; },
       });
-      this.envelope = { decay: 0 }; this.filterEnvelope = { baseFrequency: new Param(0, this) };
+      this.envelope = { decay: 0 };
+      this.filter = { frequency: new Param(0, this) };
+      this.filterEnvelope = { baseFrequency: 0 };
       nodes.push(this);
     }
     connect(node) { this.connections.push(node); return node; }
@@ -288,6 +291,9 @@ test('live kit controls smooth real nodes and remain neutral before heart settle
   const settledHearts = Object.fromEntries(Object.entries(hearts).map(([voice, heart]) => [voice, { ...heart, settled: true }]));
   kit.update(settledHearts, 11, 1);
   assert.ok(automation.some((a) => a.method === 'target' && a.node?.options?.modulationIndex != null && a.constant === 0.1), 'FM modulation is smoothed');
+  const mono = env.KITS['French house'](new Node());
+  mono.update(settledHearts, 11, 1);
+  assert.ok(automation.some((a) => a.method === 'target' && a.node?.options?.filter != null && a.constant === 0.1), 'MonoSynth filter is smoothed');
   const house = env.KITS['French house'](new Node());
   const motion = nodes.find((node) => node.options.frequency === 0.08);
   house.update(settledHearts, 12, 1);

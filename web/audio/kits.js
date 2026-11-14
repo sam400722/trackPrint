@@ -217,7 +217,7 @@ function bass(ctx, o) {
     }));
     setTone = (hr, t) => {
       const cutoff = hrLin(hr, o.filterLo ?? 100, o.filterHi ?? 600);
-      syn.filterEnvelope.baseFrequency.setTargetAtTime(cutoff, t, 0.1);
+      syn.filter.frequency.setTargetAtTime(cutoff, t, 0.1);
       character.frequency.setTargetAtTime(cutoff, t, 0.1);
     };
   }
