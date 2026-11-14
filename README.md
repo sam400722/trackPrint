@@ -78,6 +78,19 @@ cd web && python3 -m http.server 8000
 ```
 Open http://localhost:8000 in Chrome or Edge. Use **Simulate** (no hardware) or **Connect sensors**, and pick the Pi's serial port.
 
+The kit menu contains four evolving genre styles:
+
+- **French house** — four-on-the-floor groove, syncopated bass, chord stabs, and grid pumping
+- **UK garage** — swung two-step drums, shuffled hats, and syncopated bass
+- **Ambient** — sparse percussion, long bass swells, sustained chords, and wide melodic space
+- **Russian hardbass** — driving kick, offbeat donk bass, short riffs, and concise fills
+
+Each active sensor evolves its assigned voice automatically from its recent signal history
+and the shared musical grid. Kit selection is the only creative control; connection,
+simulation, and routing controls remain operational controls. Pulse amplitude and beat
+interval variation are bounded modulation sources, not calibrated finger-pressure or
+breathing-rate controls.
+
 Not all four sensors wired yet? Open http://localhost:8000/?fill=sim and use **Connect sensors**: channels whose sensor reads `0` (not plugged in) get simulated pulses, the real ones play from your fingers.
 
 ## Testing with one sensor
