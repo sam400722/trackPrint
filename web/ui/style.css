@@ -1,0 +1,29 @@
+@font-face { font-family: Fraunces; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(fonts/fraunces-latin-wght-normal.woff2) format("woff2"); }
+@font-face { font-family: Fraunces; font-style: italic; font-weight: 100 900; font-display: swap;
+  src: url(fonts/fraunces-latin-wght-italic.woff2) format("woff2"); }
+@font-face { font-family: Nunito; font-style: normal; font-weight: 200 1000; font-display: swap;
+  src: url(fonts/nunito-latin-wght-normal.woff2) format("woff2"); }
+
+:root {
+  --bg-a: #0b1430;
+  --bg-b: #1d1238;
+  --text: #f4ecff;
+  --muted: rgb(244 236 255 / .55);
+  --drums: #ff9e7a;
+  --bass: #7ad1ff;
+  --lead: #ffe07a;
+  --pad: #c79bff;
+  --other: #9fe6c4;
+  --serif: Fraunces, Georgia, serif;
+  --sans: Nunito, system-ui, sans-serif;
+}
+
+body { font: 16px var(--sans); margin: 2rem; color: var(--text);
+  background: linear-gradient(135deg, var(--bg-a), var(--bg-b)) fixed; }
+h1 { font: italic 400 2rem var(--serif); }
+button, select { font: inherit; padding: .4rem .8rem; }
+#meters { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.ch { width: 9rem; padding: 1rem; border: 1px solid var(--muted); border-radius: 8px; transition: background .1s; }
+.ch.beat { background: var(--drums); color: var(--bg-a); }
+.ch.off { opacity: .4; }
