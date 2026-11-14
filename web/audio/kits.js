@@ -110,7 +110,7 @@ function drums(ctx, o) {
 
   // Envelope times are read when a trigger is scheduled, so setting them first is sample-accurate.
   const brightness = (heart, t) => {
-    const level = Math.min(1, Math.max(0, (heart?.press ?? 0.5)));
+    const level = heart?.settled ? Math.min(1, Math.max(0, (heart.press ?? 0.5))) : 0.5;
     const cutoff = Math.min(18000, Math.max(3500, (o.brightness ?? 9000) * (0.75 + 0.5 * level)));
     hatLp.frequency.setTargetAtTime(cutoff, t, 0.1);
     bus.gain.setTargetAtTime(Math.min(1.2, Math.max(0.35, 0.7 + 0.4 * level)), t, 0.1);
@@ -200,7 +200,9 @@ function bass(ctx, o) {
       envelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.3 },
       modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0.2, release: 0.3 },
     }));
-    setTone = (hr, t) => syn.modulationIndex.setValueAtTime(hrLin(hr, o.fmLo ?? 1.5, o.fmHi ?? 8), t);
+    setTone = (hr, t) => syn.modulationIndex.setTargetAtTime(
+      hrLin(hr, o.fmLo ?? 1.5, o.fmHi ?? 8), t, 0.1,
+    );
   } else if (o.type === 'soft') {
     syn = add(new Tone.Synth({
       oscillator: { type: o.osc ?? 'triangle' }, portamento: glide,
@@ -215,7 +217,7 @@ function bass(ctx, o) {
     }));
     setTone = (hr, t) => {
       const cutoff = hrLin(hr, o.filterLo ?? 100, o.filterHi ?? 600);
-      syn.filterEnvelope.baseFrequency = cutoff;
+      syn.filterEnvelope.baseFrequency.setTargetAtTime(cutoff, t, 0.1);
       character.frequency.setTargetAtTime(cutoff, t, 0.1);
     };
   }
@@ -231,7 +233,9 @@ function bass(ctx, o) {
   })).connect(bus);
   const dur = o.dur ?? '8n';
   const update = (heart, t) => {
-    const grit = Math.min(0.35, Math.max(0, 0.4 * (heart.press ?? 0.5) * (o.grit ?? 1)));
+    const grit = heart?.settled
+      ? Math.min(0.35, Math.max(0, 0.4 * (heart.press ?? 0.5) * (o.grit ?? 1)))
+      : 0;
     dist.distortion = grit;
     dist.wet.setTargetAtTime(Math.min(1, Math.max(0, grit / 0.2)), t, 0.1);
     setTone(heart.hr, t);
@@ -345,11 +349,13 @@ function pad(ctx, o) {
   let head = bus;
   if (o.chorus) head = add(new Tone.Chorus({ frequency: o.chorus.rate, delayTime: 3.5, depth: o.chorus.depth, wet: 0.5 }).start()).connect(head);
   if (o.phaser) head = add(new Tone.Phaser({ frequency: 0.15, octaves: 3, baseFrequency: 400, wet: 0.35 })).connect(head);
+  let texture = null;
   if (o.motion) {
-    head = add(new Tone.AutoFilter({
+    texture = add(new Tone.AutoFilter({
       frequency: o.motion, baseFrequency: 300, octaves: 3.5, wet: 0.7,
       filter: { type: 'lowpass', rolloff: -12, Q: 1 },
-    }).start()).connect(head);
+    }).start());
+    head = texture.connect(head);
   }
   const lp = add(new Tone.Filter({ type: 'lowpass', frequency: 1200, rolloff: -12 })).connect(head);
   const hp = add(new Tone.Filter({ type: 'highpass', frequency: 180 })).connect(lp);
@@ -373,7 +379,9 @@ function pad(ctx, o) {
     update(heart, t) {
       const cutoff = Math.min(6000, Math.max(250, hrExp(heart.hr, o.filterLo ?? 300, o.filterHi ?? 3000) * 2 ** Math.max(-1, Math.min(1, heart.breath ?? 0))));
       lp.frequency.rampTo(cutoff, 0.1, t);
-      if (o.motion && lp.wet) lp.wet.rampTo(Math.min(1, Math.max(0, 0.35 + 0.25 * (heart.press ?? 0.5))), 0.1, t);
+      if (texture) texture.wet.rampTo(
+        Math.min(1, Math.max(0, 0.35 + 0.25 * (heart.press ?? 0.5))), 0.1, t,
+      );
     },
     silence() { syn.releaseAll(); },
   };

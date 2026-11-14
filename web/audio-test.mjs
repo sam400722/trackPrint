@@ -157,20 +157,25 @@ test('kit boundaries expose four bounded, disposable, duration-aware kits', () =
   const automation = [];
   const triggers = [];
   class Param {
-    constructor(value = 0) { this.value = value; }
-    setValueAtTime(value, time) { automation.push({ method: 'set', value, time }); this.value = value; }
-    setTargetAtTime(value, time, constant) { automation.push({ method: 'target', value, time, constant }); this.value = value; }
-    linearRampToValueAtTime(value, time) { automation.push({ method: 'ramp', value, time }); this.value = value; }
-    rampTo(value, duration, time) { automation.push({ method: 'rampTo', value, duration, time }); this.value = value; }
+    constructor(value = 0, node = null) { this.value = value; this.node = node; }
+    setValueAtTime(value, time) { automation.push({ method: 'set', value, time, node: this.node }); this.value = value; }
+    setTargetAtTime(value, time, constant) { automation.push({ method: 'target', value, time, constant, node: this.node }); this.value = value; }
+    linearRampToValueAtTime(value, time) { automation.push({ method: 'ramp', value, time, node: this.node }); this.value = value; }
+    rampTo(value, duration, time) { automation.push({ method: 'rampTo', value, duration, time, node: this.node }); this.value = value; }
   }
   class Node {
     constructor(options = {}) {
       this.options = options; this.disposals = 0; this.connections = [];
-      this.volume = new Param(options.volume ?? 0); this.wet = new Param(options.wet ?? 0);
-      this.gain = new Param(options.gain ?? 1);
-      this.modulationIndex = new Param(options.modulationIndex ?? 0);
-      this.frequency = new Param(options.frequency ?? 0); this.feedback = new Param(options.feedback ?? 0);
-      this.distortion = options.distortion ?? 0; this.envelope = { decay: 0 };
+      this.volume = new Param(options.volume ?? 0, this); this.wet = new Param(options.wet ?? 0, this);
+      this.gain = new Param(options.gain ?? 1, this);
+      this.modulationIndex = new Param(options.modulationIndex ?? 0, this);
+      this.frequency = new Param(options.frequency ?? 0, this); this.feedback = new Param(options.feedback ?? 0, this);
+      let distortion = options.distortion ?? 0;
+      Object.defineProperty(this, 'distortion', {
+        get: () => distortion,
+        set: (value) => { automation.push({ method: 'property', value, node: this }); distortion = value; },
+      });
+      this.envelope = { decay: 0 };
       this.filterEnvelope = { baseFrequency: new Param(0) };
       nodes.push(this);
     }
@@ -223,4 +228,68 @@ test('kit boundaries expose four bounded, disposable, duration-aware kits', () =
   for (const entry of automation) {
     assert.ok(Number.isFinite(entry.value) && entry.value >= 0 && entry.value <= 18000, 'automation bounded');
   }
+});
+
+test('live kit controls smooth real nodes and remain neutral before heart settlement', () => {
+  const source = readFileSync(new URL('./audio/kits.js', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '').replaceAll('export const KITS', 'const KITS') + '\nglobalThis.KITS = KITS;';
+  const nodes = [];
+  const automation = [];
+  class Param {
+    constructor(value = 0, node = null) { this.value = value; this.node = node; }
+    setValueAtTime(value, time) { automation.push({ method: 'set', value, time, node: this.node }); this.value = value; }
+    setTargetAtTime(value, time, constant) { automation.push({ method: 'target', value, time, constant, node: this.node }); this.value = value; }
+    linearRampToValueAtTime(value, time) { automation.push({ method: 'ramp', value, time, node: this.node }); this.value = value; }
+    rampTo(value, duration, time) { automation.push({ method: 'rampTo', value, duration, time, node: this.node }); this.value = value; }
+  }
+  class Node {
+    constructor(options = {}) {
+      this.options = options; this.disposals = 0; this.connections = [];
+      this.volume = new Param(options.volume ?? 0, this); this.wet = new Param(options.wet ?? 0, this);
+      this.gain = new Param(options.gain ?? 1, this); this.modulationIndex = new Param(options.modulationIndex ?? 0, this);
+      this.frequency = new Param(options.frequency ?? 0, this); this.feedback = new Param(options.feedback ?? 0, this);
+      let distortion = options.distortion ?? 0;
+      Object.defineProperty(this, 'distortion', {
+        get: () => distortion,
+        set: (value) => { automation.push({ method: 'property', value, node: this }); distortion = value; },
+      });
+      this.envelope = { decay: 0 }; this.filterEnvelope = { baseFrequency: new Param(0, this) };
+      nodes.push(this);
+    }
+    connect(node) { this.connections.push(node); return node; }
+    dispose() { this.disposals++; }
+    start() { return this; }
+    triggerAttackRelease() {}
+    triggerRelease() {}
+    releaseAll() {}
+  }
+  const ctor = function (options) { return new Node(options); };
+  const Tone = new Proxy({
+    Frequency: (value) => ({ toNote: () => `midi:${value}` }),
+    dbToGain: () => 1,
+  }, { get(target, key) {
+    if (key in target) return target[key];
+    return ctor;
+  }});
+  const env = { Tone };
+  runInNewContext(source, env);
+  const out = new Node();
+  const kit = env.KITS['Russian hardbass'](out);
+  const hearts = {
+    drums: { hr: 100, press: 1, breath: 0, on: true, settled: false },
+    bass: { hr: 100, press: 1, breath: 0, on: true, settled: false },
+    lead: { hr: 100, press: 1, breath: 0, on: true, settled: false },
+    pad: { hr: 100, press: 1, breath: 0, on: true, settled: false },
+  };
+  kit.update(hearts, 10, 1);
+  assert.ok(automation.some((a) => a.method === 'target' && Math.abs(a.value - 0.9) < 1e-9), 'drum amplitude uses neutral pressure before settled');
+  assert.equal(automation.some((a) => a.time === 10 && a.method === 'target' && Math.abs(a.value - 1.1) < 1e-9), false, 'drum amplitude ignores unsettled pressure');
+  assert.equal(automation.some((a) => a.method === 'property' && a.value !== 0), false, 'bass grit stays neutral before settled');
+  const settledHearts = Object.fromEntries(Object.entries(hearts).map(([voice, heart]) => [voice, { ...heart, settled: true }]));
+  kit.update(settledHearts, 11, 1);
+  assert.ok(automation.some((a) => a.method === 'target' && a.node?.options?.modulationIndex != null && a.constant === 0.1), 'FM modulation is smoothed');
+  const house = env.KITS['French house'](new Node());
+  const motion = nodes.find((node) => node.options.frequency === 0.08);
+  house.update(settledHearts, 12, 1);
+  assert.ok(automation.some((a) => a.node === motion && a.method === 'rampTo' && a.duration === 0.1), 'pad texture balance targets the effect node');
 });
