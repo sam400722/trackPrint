@@ -1,4 +1,6 @@
-# trackPrint
+# flatline
+
+The project folder, repo, and Pi service are still named `trackprint`.
 
 Four heart-rate sensors → four-voice electronic band in the browser.
 ch0 drums · ch1 bass · ch2 lead · ch3 pad.
