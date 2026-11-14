@@ -59,7 +59,7 @@ function perf() {
 $('fs').onclick = perf;
 document.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.repeat) return;
-  if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  if (e.target.closest?.('textarea, select, [contenteditable]') || e.target.matches?.('input:not([type=radio]):not([type=checkbox]):not([type=button]):not([type=submit])')) return;
   perf();
 });
 document.addEventListener('fullscreenchange', () => {
