@@ -20,10 +20,12 @@ let mode = 'beats';
 let last = [0, 0, 0, 0];
 let fingers = [];
 let counts = [0, 0, 0, 0];
+let lastT = [0, 0, 0, 0];   // mono synths reject two triggers at the same instant
 
 function fire(i, time = Tone.now()) {
   const voice = VOICES[i];
   if (++counts[i] % DIV[mode][voice]) return;
+  time = lastT[i] = Math.max(time, lastT[i] + 0.01);
   const p = mapVoice(voice, last[i]);
   kit[voice](p, time);
   Tone.getDraw().schedule(() => emit('note', { voice, ...p }), time); // fires when audible

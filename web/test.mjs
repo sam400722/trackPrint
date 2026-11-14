@@ -53,7 +53,10 @@ assert.equal(note(0, 0), 45);   // A2
 assert.equal(note(5, 0), 57);   // wraps to next octave: A3
 assert.equal(note(7, 1), 74);   // index 7 = octave+1, degree 2 (D)
 // raw = fields a=1, b=0, c=15, d=0, shifted past the 2 skipped low bits
-assert.deepEqual(mapVoice('drums', ((15 << 6) | 1) << 2), { drum: 'snare', velocity: 1 });
+assert.deepEqual(mapVoice('drums', ((15 << 6) | 1) << 2), { drum: 'hat', velocity: 1 });
+assert.deepEqual(mapVoice('drums', 2 << 2).drum, 'snare');
+assert.deepEqual([...Array(8).keys()].map((a) => mapVoice('drums', a << 2).drum),
+  ['kick', 'hat', 'snare', 'hat', 'kick', 'clap', 'openhat', 'tom']);
 assert.deepEqual(mapVoice('pad', 0), { notes: [57, 62, 67], velocity: 0.4, cutoff: 200 });
 assert.deepEqual(mapVoice('bass', 0), { notes: [45], velocity: 0.4, cutoff: 200 });
 console.log('mapping ok');
