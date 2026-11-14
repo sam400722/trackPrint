@@ -1,15 +1,11 @@
 // Song tempo from the drum finger's heart. Pure.
 
-export const TEMPO_DEFAULT = 90;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 
-// Heart rate 50..110 maps linearly to song tempo 100..180, clamped.
+// Heart rate 50..110 maps linearly into the selected genre's bounded range.
 export function songBpm(hr, genreName) {
-  if (genreName) {
-    const { min, max } = GENRE_TEMPOS[genreName];
-    return min + (max - min) * clamp((hr - 50) / 60, 0, 1);
-  }
-  return 100 + 80 * clamp((hr - 50) / 60, 0, 1);
+  const { min, max } = GENRE_TEMPOS[genreName];
+  return min + (max - min) * clamp((hr - 50) / 60, 0, 1);
 }
 
 const GENRE_TEMPOS = {
@@ -19,31 +15,21 @@ const GENRE_TEMPOS = {
   'Russian hardbass': { min: 145, max: 165, default: 150 },
 };
 
-// Tempo band: slow < 125 <= mid <= 155 < fast. Leaving the previous band takes
-// 3 BPM past its edge, so a tempo sitting on an edge doesn't flip every step.
-export function band(bpm, prev) {
-  const raw = bpm < 125 ? 'slow' : bpm <= 155 ? 'mid' : 'fast';
-  if (!prev || raw === prev) return raw;
-  if (prev === 'slow') return bpm >= 128 ? raw : 'slow';
-  if (prev === 'fast') return bpm <= 152 ? raw : 'fast';
-  if (raw === 'slow') return bpm < 122 ? 'slow' : 'mid';
-  return bpm > 158 ? 'fast' : 'mid';
-}
-
 // Tempo follower. update(drumHeart) -> target BPM.
-//   default 90 while the drum finger is off or unsettled
+//   genre default while the drum finger is off or unsettled
 //   lock    first settled reading jumps the target to songBpm(hr)
 //   follow  then moves only for changes of 2 BPM or more
 //   release finger lifts: back to 90
 // The caller glides the transport to each new target over 2 bars.
 export function createTempo(genreName) {
-  const genre = genreName && GENRE_TEMPOS[genreName];
-  let target = genre?.default ?? TEMPO_DEFAULT;
+  const genre = GENRE_TEMPOS[genreName];
+  if (!genre) throw new RangeError(`Unknown genre: ${genreName}`);
+  let target = genre.default;
   let locked = false;
   return function update(drum) {
     if (!drum.on || !drum.settled) {
       locked = false;
-      target = genre?.default ?? TEMPO_DEFAULT;
+      target = genre.default;
     } else {
       const want = songBpm(drum.hr, genreName);
       if (!locked || Math.abs(want - target) >= 2) target = want;

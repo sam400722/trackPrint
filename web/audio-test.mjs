@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { HEART_OFF } from './audio/heart.js';
+import { VOICES } from './bus.js';
 import { GENRES } from './audio/patterns.js';
 import { createTempo, songBpm } from './audio/tempo.js';
 import { phraseSeed, SCALE, ROOT } from './audio/mapping.js';
@@ -298,4 +299,70 @@ test('live kit controls smooth real nodes and remain neutral before heart settle
   const motion = nodes.find((node) => node.options.frequency === 0.08);
   house.update(settledHearts, 12, 1);
   assert.ok(automation.some((a) => a.node === motion && a.method === 'rampTo' && a.duration === 0.1), 'pad texture balance targets the effect node');
+});
+
+test('audio lifecycle schedules the selected genre through one persistent repeat callback', () => {
+  const source = readFileSync(new URL('./audio/audio.js', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '');
+  const handlers = {};
+  const emitted = [];
+  const repeats = [];
+  const ramps = [];
+  const created = [];
+  const drawn = [];
+  class Node {
+    chain() { return this; } fan() { return this; } connect() { return this; }
+    dispose() {} silence() {}
+  }
+  const transport = {
+    bpm: { value: 120, rampTo(value, duration, time) { ramps.push({ value, duration, time }); this.value = value; }, cancelScheduledValues() {} },
+    scheduleRepeat(fn) { repeats.push(fn); return repeats.length; },
+    start() { this.started = true; },
+    stop() { this.stopped = true; },
+    position: 0,
+  };
+  const Tone = {
+    Gain: Node, Compressor: Node, Limiter: Node, Waveform: Node, FFT: Node,
+    getDestination: () => new Node(), getTransport: () => transport,
+    getDraw: () => ({ schedule(fn, time) { drawn.push({ fn, time }); } }),
+    Time: () => ({ toSeconds: () => 0.125 }), start: async () => {},
+  };
+  const KITS = Object.fromEntries(Object.keys(GENRES).map((name) => [name, () => {
+    const instance = {
+      name, tail: 0, ready: Promise.resolve(), events: [], silences: 0, disposals: 0,
+      drums(p, h, time) { this.events.push({ voice: 'drums', p, time }); },
+      bass(p, h, time) { this.events.push({ voice: 'bass', p, time }); },
+      lead(p, h, time) { this.events.push({ voice: 'lead', p, time }); },
+      pad(p, h, time) { this.events.push({ voice: 'pad', p, time }); },
+      update() {}, lift() {}, silence() { this.silences++; }, dispose() { this.disposals++; },
+    };
+    created.push(instance);
+    return instance;
+  }]));
+  const active = { on: true, settled: true, hr: 75, press: 0.5, breath: 0 };
+  const env = {
+    Tone, KITS, VOICES, HEART_OFF, createHeart: () => (channel) => channel?.finger ? active : HEART_OFF,
+    createTempo, createEvolution, GENRES,
+    emit: (type, detail) => emitted.push([type, detail]),
+    on: (type, fn) => { handlers[type] = fn; },
+    setTimeout() {},
+  };
+  runInNewContext(source, env);
+  assert.equal(repeats.length, 1);
+  handlers.status('running');
+  assert.equal(transport.started, true);
+  handlers.frame({ raws: [1, 2, 3, 4], ch: [{ finger: false }, { finger: false }, { finger: false }, { finger: false }] });
+  repeats[0](0);
+  assert.equal(created[0].events.length, 0, 'all-off input is silent');
+  handlers.frame({ raws: [1, 2, 3, 4], ch: [{ finger: true }, { finger: true }, { finger: true }, { finger: true }] });
+  handlers.kit('UK garage');
+  handlers.kit('Russian hardbass');
+  repeats[0](0.125);
+  assert.equal(created.length, 1, 'pending selections do not allocate early');
+  for (let i = 0; i < 15; i++) repeats[0](0.25 + i * 0.125);
+  assert.equal(created.length, 2, 'winning selection allocates at the bar');
+  repeats[0](0);
+  assert.equal(ramps.at(-1).value, songBpm(75, 'Russian hardbass'));
+  assert.ok(drawn.every(({ time }) => Number.isFinite(time)));
+  assert.ok(emitted.some(([type]) => type === 'kits'));
 });

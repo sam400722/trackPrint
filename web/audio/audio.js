@@ -1,18 +1,13 @@
-// Frames -> notes. One heart-driven 16th-note grid (docs/superpowers/specs/2026-11-14-heart-mapping-design.md):
-// the drum finger sets the tempo, the tempo band picks the patterns, each finger
-// shapes its own voice's timbre, and raw bits pick pitch and velocity.
+// The transport owns one shared 16th-note clock; genre engines own phrase choices.
 import * as Tone from 'https://cdn.jsdelivr.net/npm/tone@15.0.4/+esm';
 import { emit, on, VOICES } from '../bus.js';
-import { mapVoice } from './mapping.js';
 import { KITS } from './kits.js';
 import { createHeart, HEART_OFF } from './heart.js';
-import { createTempo, band as bandFor, TEMPO_DEFAULT } from './tempo.js';
-import { DRUM_PATTERNS, BASS_PATTERNS, PAD_EVERY, isOff8th, leadLevel, LEAD_STEPS } from './patterns.js';
+import { createTempo } from './tempo.js';
+import { GENRES } from './patterns.js';
+import { createEvolution } from './evolution.js';
 
-const [DRUMS, BASS, LEAD, PAD] = [0, 1, 2, 3]; // channel indexes
-
-// Kits -> master -> glue compressor -> limiter -> speakers. The analysers tap the
-// limiter so the visuals see exactly the final mix.
+const [DRUMS, BASS, LEAD, PAD] = [0, 1, 2, 3];
 const master = new Tone.Gain();
 const comp = new Tone.Compressor({ threshold: -18, ratio: 3, attack: 0.01, release: 0.2 });
 const limiter = new Tone.Limiter(-1);
@@ -21,125 +16,129 @@ const wave = new Tone.Waveform(256);
 const fft = new Tone.FFT(64);
 limiter.fan(wave, fft);
 
-let kitName = Object.keys(KITS)[0]; // first kit is the default
-let kit = KITS[kitName](master);
-
-// Heart trackers and tempo live outside the kit, so they survive a kit switch.
-let trackers, hearts, tempo, target, band, pendingBand, step, leadLvl, arpI, wasOn, lastT;
+const defaultName = Object.keys(GENRES)[0];
+let selectedName = defaultName;
+let activeName = defaultName;
+let kit = KITS[activeName](master);
+let failedKit = false;
+let pendingName = null;
+let trackers;
+let hearts;
+let tempo;
+let target;
+let evolution;
+let step = 0;
+let running = false;
 let last = [0, 0, 0, 0];
-let bar = { bass: [], lead: [], pad: [] }; // per-bar pitch picks
-function reset() {
+let lastT = {};
+const stepSeconds = Tone.Time('16n').toSeconds();
+const transport = Tone.getTransport();
+transport.bpm.value = GENRES[defaultName].tempo.default;
+
+function resetState() {
   trackers = VOICES.map(() => createHeart(50));
   hearts = VOICES.map(() => HEART_OFF);
-  tempo = createTempo();
-  target = TEMPO_DEFAULT;
-  band = pendingBand = 'slow';
+  tempo = createTempo(activeName);
+  target = GENRES[activeName].tempo.default;
+  evolution = createEvolution(activeName);
   step = 0;
-  leadLvl = null;
-  arpI = 0;
-  wasOn = VOICES.map(() => false);
-  lastT = {}; // per synth: mono synths reject two triggers at the same instant
+  lastT = {};
 }
-reset();
+resetState();
 
 on('frame', ({ raws, ch }) => {
   last = raws;
-  hearts = ch.map((c, i) => trackers[i](c));
+  hearts = ch.map((channel, index) => trackers[index](channel));
 });
 
-function play(voice, p, heart, time, key = voice) {
-  time = lastT[key] = Math.max(time, (lastT[key] ?? 0) + 0.01);
-  kit[voice](p, heart, time);
-  const n = { voice, ...p, kit: kitName };
-  Tone.getDraw().schedule(() => emit('note', n), time); // fires when audible
+function disposeLater(old) {
+  setTimeout(() => old.dispose(), (old.tail ?? 3) * 1000);
 }
 
-function pickBar() {
-  bar.bass = mapVoice('bass', last[BASS]).notes;
-  bar.lead = mapVoice('lead', last[LEAD]).notes;
-  bar.pad = mapVoice('pad', last[PAD]).notes;
-  arpI = 0;
+function activate(name, time = 0) {
+  if (!KITS[name] || name === activeName && !failedKit) return;
+  const old = kit;
+  let next;
+  try {
+    next = KITS[name](master);
+  } catch (error) {
+    emit('status', `error: ${error.message}`);
+    return;
+  }
+  kit = next;
+  activeName = selectedName = name;
+  failedKit = false;
+  pendingName = null;
+  tempo = createTempo(name);
+  target = GENRES[name].tempo.default;
+  evolution = createEvolution(name);
+  old.silence();
+  disposeLater(old);
+  if (running) transport.bpm.rampTo(target, (8 * 60) / transport.bpm.value, time);
+  Promise.resolve(next.ready).catch((error) => {
+    if (kit !== next) return;
+    failedKit = true;
+    next.silence();
+    emit('status', `error: ${error.message}`);
+  });
 }
 
-const transport = Tone.getTransport();
-transport.bpm.value = TEMPO_DEFAULT;
+function play(voice, params, heart, time, key = voice, sourceKit = kit, sourceName = activeName) {
+  const effective = lastT[key] = Math.max(time, (lastT[key] ?? 0) + 0.01);
+  sourceKit[voice](params, heart, effective);
+  const note = { voice, ...params, kit: sourceName };
+  Tone.getDraw().schedule(() => emit('note', note), effective);
+}
 
-transport.scheduleRepeat((time) => {
+const repeat = (time) => {
+  if (!running) return;
   const s = step++ % 16;
+  if (s === 0 && pendingName) activate(pendingName, time);
+  if (failedKit) return;
 
-  // 1. Tempo from the drum finger; glide to each new target over 2 bars.
   const next = tempo(hearts[DRUMS]);
-  if (next !== target) {
+  if (next !== target || (s === 0 && next !== transport.bpm.value)) {
     target = next;
+    transport.bpm.cancelScheduledValues(time);
     transport.bpm.rampTo(target, (8 * 60) / transport.bpm.value, time);
   }
-  pendingBand = bandFor(target, pendingBand);
-
-  // 2. Bar boundary: band changes land here, and the bits pick new pitches.
-  if (s === 0) {
-    band = pendingBand;
-    pickBar();
-  } else if (s % PAD_EVERY[band] === 0) {
-    bar.pad = mapVoice('pad', last[PAD]).notes; // fast band: a second chord mid-bar
-  }
-  kit.update({ drums: hearts[DRUMS], bass: hearts[BASS], lead: hearts[LEAD], pad: hearts[PAD] }, time);
-
-  // 3. Voices with a finger on fire from their pattern or step rate.
-  VOICES.forEach((voice, i) => {
-    const h = hearts[i];
-    if (!h.on) {
-      if (wasOn[i]) kit.lift(voice); // pad releases; bass and lead finish their envelopes
-      wasOn[i] = false;
-      return;
-    }
-    wasOn[i] = true;
-    const bits = mapVoice(voice, last[i]); // velocity (and cutoff) from this step's raw value
-
-    if (i === DRUMS) {
-      for (const drum of ['kick', 'snare', 'hat']) {
-        if (!DRUM_PATTERNS[band][drum][s]) continue;
-        const accent = drum === 'hat' && isOff8th(s) ? 0.5 : 1;
-        const velocity = (0.5 + 0.5 * h.press) * bits.velocity * accent;
-        play('drums', { drum, velocity }, h, time, drum);
-      }
-    } else if (i === BASS) {
-      if (BASS_PATTERNS[band][s]) play('bass', { ...bits, notes: bar.bass }, h, time);
-    } else if (i === LEAD) {
-      leadLvl = leadLevel(h.hr, leadLvl);
-      const every = LEAD_STEPS[leadLvl];
-      if (s % every === 0) {
-        const note = bar.lead[arpI++ % bar.lead.length];
-        const duration = every * Tone.Time('16n').toSeconds();
-        play('lead', { ...bits, notes: [note], velocity: 0.4 + 0.6 * h.press, duration }, h, time);
-      }
-    } else if (s % PAD_EVERY[band] === 0) {
-      play('pad', { ...bits, notes: bar.pad }, h, time);
-    }
+  kit.update(Object.fromEntries(VOICES.map((voice, index) => [voice, hearts[index]])), time, s);
+  const events = evolution.next({ raws: last, hearts, stepSeconds });
+  events.forEach((event) => {
+    play(event.voice, event.params, hearts[VOICES.indexOf(event.voice)], time + event.offset,
+      event.voice === 'drums' ? event.params.drum : event.voice, kit, activeName);
   });
-}, '16n');
+};
+transport.scheduleRepeat(repeat, '16n');
 
-const begin = () => Tone.start(); // runs inside the click: browsers need a gesture for audio
+const begin = () => Tone.start();
 on('connect', begin);
 on('simulate', begin);
-on('status', (s) => {
-  if (s === 'running') {
+on('status', (status) => {
+  if (status === 'running') {
+    running = true;
+    if (failedKit || selectedName !== activeName) activate(selectedName);
     transport.start();
     return;
   }
+  running = false;
+  pendingName = null;
   kit.silence();
-  reset();
+  transport.stop();
+  transport.position = 0;
   transport.bpm.cancelScheduledValues(0);
-  transport.bpm.value = TEMPO_DEFAULT;
+  transport.bpm.value = GENRES[selectedName].tempo.default;
+  resetState();
 });
 on('kit', (name) => {
-  if (!KITS[name]) return;
-  const old = kit;
-  kitName = name;
-  kit = KITS[name](master);
-  old.silence();
-  // Let release and effect tails ring out before freeing the old kit's nodes.
-  setTimeout(() => old.dispose(), (old.tail ?? 3) * 1000);
+  if (!GENRES[name] || !KITS[name]) return;
+  selectedName = name;
+  if (!running) {
+    activate(name);
+  } else if (name !== activeName) {
+    pendingName = name;
+  }
 });
 
-emit('kits', Object.keys(KITS));
+emit('kits', Object.keys(GENRES));
 emit('analyser', { wave, fft });

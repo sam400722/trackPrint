@@ -82,73 +82,17 @@ import { createChannel } from './signal.js';
 }
 console.log('signal ok');
 
-import { fields, note, mapVoice } from './audio/mapping.js';
+import { fields, note } from './audio/mapping.js';
 
 assert.deepEqual(fields((10 << 10) | (6 << 6) | (5 << 3) | 3, [3, 3, 4, 4]), [3, 5, 6, 10]);
 assert.equal(note(0, 0), 45);   // A2
 assert.equal(note(5, 0), 57);   // wraps to next octave: A3
 assert.equal(note(7, 1), 74);   // index 7 = octave+1, degree 2 (D)
-// raw = fields a=1, b=0, c=15, d=0, shifted past the 2 skipped low bits
-assert.deepEqual(mapVoice('drums', ((15 << 6) | 1) << 2), { velocity: 1 }); // patterns pick the drum
-assert.deepEqual(mapVoice('pad', 0), { notes: [57, 62, 67], velocity: 0.4, cutoff: 200 });  // A3 D4 G4
-assert.deepEqual(mapVoice('bass', 0), { notes: [45], velocity: 0.4, cutoff: 200 });         // A2
-assert.deepEqual(mapVoice('bass', 7 << 2).notes, [mapVoice('bass', 2 << 2).notes[0]]);      // degree a % 5
-assert.deepEqual(mapVoice('lead', 0).notes, [69, 74, 79, 81]);                              // A4 D5 G5 A5
-assert.deepEqual(mapVoice('lead', 6 << 12).notes, mapVoice('lead', 1 << 12).notes);         // root d % 5
-{
-  // Every note any voice can play is in the scale, whatever the raw bits.
-  const { SCALE, ROOT } = await import('./audio/mapping.js');
-  const inScale = (m) => SCALE.includes((((m - ROOT) % 12) + 12) % 12);
-  for (let raw = 0; raw < 1 << 16; raw += 7) {
-    for (const v of ['bass', 'lead', 'pad']) {
-      const p = mapVoice(v, raw);
-      assert.ok(p.notes.every(inScale), `${v} ${p.notes} off-scale for raw ${raw}`);
-      assert.ok(p.velocity >= 0.4 && p.velocity <= 1 && p.cutoff >= 200 && p.cutoff <= 2450);
-    }
-    assert.ok(Math.max(...mapVoice('lead', raw).notes) <= 93); // arp tops out at A6
-  }
-}
 console.log('mapping ok');
 
-import { songBpm, band, createTempo, TEMPO_DEFAULT } from './audio/tempo.js';
 import { createHeart, HR_DEFAULT } from './audio/heart.js';
-import { leadLevel, LEAD_STEPS, DRUM_PATTERNS, BASS_PATTERNS, isOff8th } from './audio/patterns.js';
 
 {
-  // songBpm: 50 -> 100, 110 -> 180, clamped outside
-  assert.equal(songBpm(50), 100);
-  assert.equal(songBpm(110), 180);
-  assert.equal(songBpm(80), 140);
-  assert.equal(songBpm(30), 100);
-  assert.equal(songBpm(150), 180);
-
-  // band edges and hysteresis
-  assert.equal(band(124), 'slow');
-  assert.equal(band(125), 'mid');
-  assert.equal(band(155), 'mid');
-  assert.equal(band(156), 'fast');
-  let b = 'slow';
-  for (const bpm of [124, 126, 124, 126, 127]) assert.equal((b = band(bpm, b)), 'slow'); // no flapping at 125 +- 1
-  assert.equal((b = band(128, b)), 'mid');
-  for (const bpm of [124, 126, 123, 122.5]) assert.equal((b = band(bpm, b)), 'mid');
-  assert.equal(band(121, b), 'slow');
-  assert.equal(band(158, 'mid'), 'mid');
-  assert.equal(band(159, 'mid'), 'fast');
-  assert.equal(band(153, 'fast'), 'fast');
-  assert.equal(band(152, 'fast'), 'mid');
-
-  // tempo follower
-  const tempo = createTempo();
-  const h = (on, settled, hr) => ({ on, settled, hr, press: 0.5, breath: 0 });
-  assert.equal(tempo(h(false, false, 75)), TEMPO_DEFAULT);
-  assert.equal(tempo(h(true, false, 72)), TEMPO_DEFAULT);          // holds 90 until settled
-  assert.equal(tempo(h(true, true, 72)), songBpm(72));             // lock
-  assert.equal(tempo(h(true, true, 72.5)), songBpm(72));           // +0.67 BPM jitter ignored
-  assert.equal(tempo(h(true, true, 73)), songBpm(72));             // +1.33 still ignored
-  assert.equal(tempo(h(true, true, 74)), songBpm(74));             // +2.67 follows
-  assert.equal(tempo(h(false, false, 75)), TEMPO_DEFAULT);         // release
-  assert.equal(tempo(h(true, true, 90)), songBpm(90));             // re-lock after landing again
-
   // heart: breath follows a +-6 BPM breathing sine on a 70 BPM heart; press tracks amp
   const heart = createHeart(50);
   let t = 0, nextBeat = 0, s, prevBeat = 0, amp = 300, pressBefore, pressAfter;
@@ -176,20 +120,6 @@ import { leadLevel, LEAD_STEPS, DRUM_PATTERNS, BASS_PATTERNS, isOff8th } from '.
   assert.equal(heart({ finger: false }).on, false);
   assert.equal(heart({ finger: true, beat: false, bpm: 70, amp: 300, inst: 70 }).settled, false); // lift resets
 
-  // lead arp step lookup and hysteresis
-  assert.deepEqual([60, 64.9, 65, 74.9, 75, 85, 95, 120].map((hr) => LEAD_STEPS[leadLevel(hr)]),
-    [16, 16, 8, 8, 4, 2, 1, 1]);
-  assert.equal(leadLevel(66, 0), 0);  // needs 67 to leave 'whole'
-  assert.equal(leadLevel(67, 0), 1);
-  assert.equal(leadLevel(63.5, 1), 1); // needs < 63 to drop back
-  assert.equal(leadLevel(62.9, 1), 0);
-  assert.equal(leadLevel(100, 0), 4); // big jumps still land in one go
-
-  // patterns are 16 steps; hats on the off-8ths are the half-velocity ones
-  for (const p of [...Object.values(DRUM_PATTERNS).flatMap(Object.values), ...Object.values(BASS_PATTERNS)]) {
-    assert.equal(p.length, 16);
-  }
-  assert.deepEqual([...Array(16).keys()].filter(isOff8th), [2, 6, 10, 14]);
 }
 console.log('heart ok');
 
