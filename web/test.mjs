@@ -46,3 +46,20 @@ assert.deepEqual(mapVoice('drums', ((15 << 6) | 1) << 2), { drum: 'snare', veloc
 assert.deepEqual(mapVoice('pad', 0), { notes: [57, 62, 67], velocity: 0.4, cutoff: 200 });
 assert.deepEqual(mapVoice('bass', 0), { notes: [45], velocity: 0.4, cutoff: 200 });
 console.log('mapping ok');
+
+import { on } from './bus.js';
+import { start } from './core.js';
+
+{
+  let got = null;
+  const status = [];
+  on('frame', (d) => (got = d));
+  on('status', (s) => status.push(s)); // sticky: replays 'idle' right away
+  await start((onFrame) => { onFrame([100000, 0, 0, 0]); return async () => {}; });
+  assert.deepEqual(got.raws, [100000, 0, 0, 0]);
+  assert.equal(got.ch.length, 4);
+  assert.ok(got.ch[0].finger && !got.ch[1].finger);
+  assert.deepEqual(Object.keys(got.ch[0]).sort(), ['ac', 'beat', 'bpm', 'finger']);
+  assert.deepEqual(status, ['idle', 'running']);
+}
+console.log('contract ok');
